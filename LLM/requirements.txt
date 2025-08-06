@@ -10,3 +10,9 @@ langchain-anthropic
 # Utility packages
 python-dotenv
 pyyaml
+pytz
+
+# Web Server packages
+fastapi
+uvicorn
+websockets
