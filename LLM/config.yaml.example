@@ -1,0 +1,32 @@
+characters:
+  - name: "ルミナ"
+    short_name: "L"
+    provider: "ollama" # Ollamaを使用
+    model: "gemma:2b"
+    base_url: "http://<Ollamaサーバーが動いているPCのIPアドレス>:11434"
+
+  - name: "ノクス"
+    short_name: "N"
+    provider: "openai" # OpenAIを使用
+    model: "gpt-4o"
+    api_key_env: "OPENAI_API_KEY" # .envファイル内のキー名を指定
+
+  - name: "クラリス"
+    short_name: "C"
+    provider: "gemini" # Google Geminiを使用
+    model: "gemini-1.5-pro-latest"
+    api_key_env: "GOOGLE_API_KEY"
+
+  - name: "ソフィア" # 4人目の追加例
+    short_name: "S"
+    provider: "anthropic" # Anthropicを使用
+    model: "claude-3-sonnet-20240229"
+    api_key_env: "ANTHROPIC_API_KEY"
+
+  - name: "エージェント" # 5人目の追加例
+    short_name: "A"
+    provider: "openrouter" # OpenRouterを使用
+    model: "mistralai/mistral-7b-instruct:free"
+    api_key_env: "OPENROUTER_API_KEY"
+
+# 今後、Azure, Cohere, Bedrockなども`provider`を追加することで対応可能

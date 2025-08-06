@@ -1,0 +1,18 @@
+characters:
+  - name: "ルミナ"
+    short_name: "る"
+    provider: "ollama" # Ollamaを使用
+    model: "7shi/llm-jp-3-ezo-humanities:3.7b-instruct-q8_0"
+    base_url: "http://192.168.1.33:11434"
+
+  - name: "クラリス"
+    short_name: "く"
+    provider: "ollama" # Ollamaを使用
+    model: "amoral-gemma3:latest"
+    base_url: "http://192.168.1.33:11434"
+
+  - name: "ノクス"
+    short_name: "の"
+    provider: "ollama" # Ollamaを使用
+    model: "deepseek-r1:1.5b"
+    base_url: "http://192.168.1.33:11434"

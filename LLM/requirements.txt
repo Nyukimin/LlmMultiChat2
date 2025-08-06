@@ -1,0 +1,12 @@
+# LangChain Core and Community
+langchain
+langchain-community
+
+# Provider-specific packages
+langchain-openai
+langchain-google-genai
+langchain-anthropic
+
+# Utility packages
+python-dotenv
+pyyaml

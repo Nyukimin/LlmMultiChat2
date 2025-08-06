@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Multi-Character Chat UI</title>
+    
+    <link rel="stylesheet" href="style.css">
+    
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+    
+    <script src="app.js" defer></script>
+</head>
+<body>
+
+    <div class="chat-container">
+        <header class="chat-header">
+            <div class="status-panel">
+                <div class="char-status lumina-status">
+                    <span class="char-icon">L</span> LUMINA <span id="lumina-state" class="char-state active">● ACTIVE</span>
+                </div>
+                <div class="char-status claris-status">
+                    <span class="char-icon">C</span> CLARIS <span id="claris-state" class="char-state idle">● IDLE</span>
+                </div>
+                <div class="char-status nox-status">
+                    <span class="char-icon">N</span> NOX <span id="nox-state" class="char-state idle">● IDLE</span>
+                </div>
+            </div>
+        </header>
+
+        <main id="chat-log" class="chat-log"></main>
+
+        <footer class="chat-input-area">
+            <form id="chat-form" class="chat-form">
+                <input type="text" id="user-input" class="user-input" placeholder="ここにメッセージを入力して割り込む..." autocomplete="off">
+                <button type="submit" id="send-button" class="send-button">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="24" height="24">
+                        <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/>
+                    </svg>
+                </button>
+            </form>
+        </footer>
+    </div>
+
+</body>
+</html>
