@@ -1,0 +1,30 @@
+[2025-08-07 16:00:02] [INFO] [CharacterManager] Initializing CharacterManager.
+[2025-08-07 16:00:02] [INFO] [LLMFactory] Initializing LLMFactory.
+[2025-08-07 16:00:02] [INFO] [LLMFactory] LLMFactory initialized.
+[2025-08-07 16:00:02] [INFO] [LLMInstanceManager] Initializing LLMInstanceManager.
+[2025-08-07 16:00:02] [INFO] [LLMFactory] Initializing LLMFactory.
+[2025-08-07 16:00:02] [INFO] [LLMFactory] LLMFactory initialized.
+[2025-08-07 16:00:02] [INFO] [LLMInstanceManager] LLMInstanceManager initialized.
+[2025-08-07 16:00:02] [INFO] [PersonaManager] Initializing PersonaManager.
+[2025-08-07 16:00:02] [INFO] [PersonaManager] Personas loaded successfully.
+[2025-08-07 16:00:02] [INFO] [PersonaManager] PersonaManager initialized.
+[2025-08-07 16:00:02] [INFO] [CharacterManager] CharacterManager initialized.
+[2025-08-07 16:00:02] [INFO] [Main] Starting Uvicorn server.
+[2025-08-07 16:00:02] [INFO] [Main] Application startup initiated.
+[2025-08-07 16:00:07] [INFO] [WebSocket] New WebSocket connection established.
+[2025-08-07 16:00:07] [INFO] [WebSocket] WebSocket connection accepted.
+[2025-08-07 16:00:07] [INFO] [CharacterManager] Listing all characters.
+[2025-08-07 16:00:07] [INFO] [WebSocket] Character configuration sent to client.
+[2025-08-07 16:00:07] [ERROR] [WebSocket] Error in WebSocket endpoint: [Errno 2] No such file or directory: ''
+Traceback (most recent call last):
+  File "E:\GenerativeAI\LlmMultiChat\LLM\main.py", line 57, in ws_endpoint
+    await wm.websocket_endpoint(websocket, manager)
+  File "E:\GenerativeAI\LlmMultiChat\LLM\websocket_manager.py", line 11, in websocket_endpoint
+    write_log(log_filename, "WebSocketManager", "WebSocket endpoint activated.")
+  File "E:\GenerativeAI\LlmMultiChat\LLM\log_manager.py", line 18, in write_log
+    with open(filename, 'a', encoding='utf-8') as f:
+FileNotFoundError: [Errno 2] No such file or directory: ''
+
+[2025-08-07 16:00:07] [INFO] [WebSocket] WebSocket connection closed.
+[2025-08-07 16:08:12] [INFO] [Main] Application shutdown completed.
+[2025-08-07 16:08:12] [INFO] [Main] Uvicorn server stopped.

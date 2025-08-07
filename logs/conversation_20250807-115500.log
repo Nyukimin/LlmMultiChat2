@@ -1,0 +1,26 @@
+[11:55:00] CharacterManager: Initializing CharacterManager.
+[11:55:00] LLMInstanceManager: Initializing LLMInstanceManager.
+[11:55:00] LLMInstanceManager: Starting LLM connection setup.
+[11:55:00] LLMFactory: Attempting to create LLM for provider: ollama, model: 7shi/llm-jp-3-ezo-humanities:3.7b-instruct-q8_0
+[11:55:00] LLMFactory: Successfully created LLM for provider: ollama, model: 7shi/llm-jp-3-ezo-humanities:3.7b-instruct-q8_0
+[11:55:00] LLMInstanceManager: Successfully connected LLM for LUMINA: ollama/7shi/llm-jp-3-ezo-humanities:3.7b-instruct-q8_0 @ http://192.168.1.33:11434
+[11:55:00] LLMFactory: Attempting to create LLM for provider: ollama, model: amoral-gemma3:latest
+[11:55:00] LLMFactory: Successfully created LLM for provider: ollama, model: amoral-gemma3:latest
+[11:55:00] LLMInstanceManager: Successfully connected LLM for CLARIS: ollama/amoral-gemma3:latest @ http://192.168.1.33:11434
+[11:55:00] LLMFactory: Attempting to create LLM for provider: ollama, model: deepseek-r1:1.5b
+[11:55:00] LLMFactory: Successfully created LLM for provider: ollama, model: deepseek-r1:1.5b
+[11:55:00] LLMInstanceManager: Successfully connected LLM for NOX: ollama/deepseek-r1:1.5b @ http://192.168.1.33:11434
+[11:55:00] LLMInstanceManager: LLM connection setup completed.
+[11:55:00] PersonaManager: Initializing PersonaManager with path: LLM/personas.yaml
+[11:55:00] PersonaManager: Personas loaded successfully.
+[11:55:00] CharacterManager: CharacterManager initialized.
+[11:55:00] System: FastAPI application startup.
+[11:55:04] System: WebSocket connection established.
+[11:55:04] System: WebSocket connection accepted.
+[11:55:04] CharacterManager: Listing all characters.
+[11:55:04] CharacterManager: Characters listed.
+[11:55:04] System: Character configuration sent to client.
+[11:55:04] WebSocketManager: WebSocket endpoint activated.
+[11:55:04] System: WebSocket error: Expected ASGI message "websocket.send" or "websocket.close", but got 'websocket.accept'
+[11:55:04] System: WebSocket connection closed.
+[11:59:08] System: FastAPI application shutdown.

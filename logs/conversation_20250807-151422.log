@@ -1,0 +1,5 @@
+[15:14:22] CharacterManager: Initializing CharacterManager.
+[15:14:22] LLMFactory: Initializing LLMFactory.
+[15:14:22] LLMFactory: LLMFactory initialized.
+[15:14:22] LLMInstanceManager: Initializing LLMInstanceManager.
+[15:14:22] LLMInstanceManager: Starting LLM connection setup.

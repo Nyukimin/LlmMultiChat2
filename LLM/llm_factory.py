@@ -1,35 +1,42 @@
-from typing import Optional, Any
-from langchain_community.chat_models import ChatOllama
-from langchain_openai import ChatOpenAI
-from langchain_google_genai import ChatGoogleGenerativeAI
-from langchain_anthropic import ChatAnthropic
+from typing import Optional
 
-PROVIDER_REGISTRY = {
-    "ollama": {"class": ChatOllama, "requires_api_key": False},
-    "openai": {"class": ChatOpenAI, "requires_api_key": True},
-    "gemini": {"class": ChatGoogleGenerativeAI, "requires_api_key": True},
-    "anthropic": {"class": ChatAnthropic, "requires_api_key": True},
-    "openrouter": {
-        "class": ChatOpenAI,
-        "requires_api_key": True,
-        "extra_params": {"base_url": "https://openrouter.ai/api/v1"}
-    }
-}
+from langchain_community.llms import Ollama
+from langchain_openai import ChatOpenAI
+
+from log_manager import write_log, write_operation_log, create_operation_log_filename
 
 class LLMFactory:
-    @staticmethod
-    def create_llm(provider: str, model: str, api_key: Optional[str] = None, base_url: Optional[str] = None):
-        if provider not in PROVIDER_REGISTRY:
-            raise ValueError(f"サポートされていないプロバイダーです: {provider}")
-        registry_info = PROVIDER_REGISTRY[provider]
-        llm_class = registry_info["class"]
-        kwargs = {"model": model}
-        if registry_info["requires_api_key"]:
-            if not api_key:
-                raise ValueError(f"プロバイダー「{provider}」にはAPIキーが必要です。")
-            kwargs["google_api_key" if provider == "gemini" else "api_key"] = api_key
-        if provider == "ollama" and base_url:
-            kwargs["base_url"] = base_url
-        if "extra_params" in registry_info:
-            kwargs.update(registry_info["extra_params"])
-        return llm_class(**kwargs)
+    def __init__(self, log_filename: str):
+        self.log_filename = log_filename
+        self.operation_log_filename = create_operation_log_filename()
+        write_log(self.log_filename, "LLMFactory", "Initializing LLMFactory.")
+        write_operation_log(self.operation_log_filename, "INFO", "LLMFactory", "Initializing LLMFactory.")
+        write_log(self.log_filename, "LLMFactory", "LLMFactory initialized.")
+        write_operation_log(self.operation_log_filename, "INFO", "LLMFactory", "LLMFactory initialized.")
+
+    def create_llm(self, provider: str, model: str, base_url: Optional[str] = None):
+        write_log(self.log_filename, "LLMFactory", f"Creating LLM with provider: {provider}, model: {model}")
+        write_operation_log(self.operation_log_filename, "INFO", "LLMFactory", f"Creating LLM with provider: {provider}, model: {model}")
+        try:
+            if provider.lower() == "ollama":
+                write_log(self.log_filename, "LLMFactory", f"Creating Ollama LLM with model: {model}, base_url: {base_url}")
+                write_operation_log(self.operation_log_filename, "INFO", "LLMFactory", f"Creating Ollama LLM with model: {model}, base_url: {base_url}")
+                llm = Ollama(model=model, base_url=base_url)
+                write_log(self.log_filename, "LLMFactory", f"Ollama LLM created with model: {model}")
+                write_operation_log(self.operation_log_filename, "INFO", "LLMFactory", f"Ollama LLM created with model: {model}")
+                return llm
+            elif provider.lower() == "openai":
+                write_log(self.log_filename, "LLMFactory", f"Creating OpenAI LLM with model: {model}")
+                write_operation_log(self.operation_log_filename, "INFO", "LLMFactory", f"Creating OpenAI LLM with model: {model}")
+                llm = ChatOpenAI(model=model)
+                write_log(self.log_filename, "LLMFactory", f"OpenAI LLM created with model: {model}")
+                write_operation_log(self.operation_log_filename, "INFO", "LLMFactory", f"OpenAI LLM created with model: {model}")
+                return llm
+            else:
+                write_log(self.log_filename, "LLMFactory", f"Unsupported provider: {provider}")
+                write_operation_log(self.operation_log_filename, "WARNING", "LLMFactory", f"Unsupported provider: {provider}")
+                return None
+        except Exception as e:
+            write_log(self.log_filename, "LLMFactory", f"Error creating LLM: {e}")
+            write_operation_log(self.operation_log_filename, "ERROR", "LLMFactory", f"Error creating LLM: {e}")
+            return None

@@ -1,0 +1,15 @@
+[2025-08-07 15:59:52] [INFO] [CharacterManager] Initializing CharacterManager.
+[2025-08-07 15:59:52] [INFO] [LLMFactory] Initializing LLMFactory.
+[2025-08-07 15:59:52] [INFO] [LLMFactory] LLMFactory initialized.
+[2025-08-07 15:59:52] [INFO] [LLMInstanceManager] Initializing LLMInstanceManager.
+[2025-08-07 15:59:52] [INFO] [LLMFactory] Initializing LLMFactory.
+[2025-08-07 15:59:52] [INFO] [LLMFactory] LLMFactory initialized.
+[2025-08-07 15:59:52] [INFO] [LLMInstanceManager] LLMInstanceManager initialized.
+[2025-08-07 15:59:52] [INFO] [PersonaManager] Initializing PersonaManager.
+[2025-08-07 15:59:52] [INFO] [PersonaManager] Personas loaded successfully.
+[2025-08-07 15:59:52] [INFO] [PersonaManager] PersonaManager initialized.
+[2025-08-07 15:59:52] [INFO] [CharacterManager] CharacterManager initialized.
+[2025-08-07 15:59:52] [INFO] [Main] Starting Uvicorn server.
+[2025-08-07 15:59:52] [INFO] [Main] Application startup initiated.
+[2025-08-07 15:59:59] [INFO] [Main] Application shutdown completed.
+[2025-08-07 15:59:59] [INFO] [Main] Uvicorn server stopped.

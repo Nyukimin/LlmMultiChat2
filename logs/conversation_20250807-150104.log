@@ -1,0 +1,15 @@
+[15:01:04] System: Conversation loop started.
+[15:01:04] System: Waiting for user input...
+[15:01:13] USER: おはようございます
+[15:01:13] System: Waiting for user input...
+[15:14:19] System: Error in conversation loop: (1012, None)
+Traceback (most recent call last):
+  File "E:\GenerativeAI\LlmMultiChat\LLM\conversation_loop.py", line 24, in conversation_loop
+    while True:
+  File "C:\Users\nyuki\miniconda3\envs\ChatEnv\lib\site-packages\starlette\websockets.py", line 120, in receive_text
+    self._raise_on_disconnect(message)
+  File "C:\Users\nyuki\miniconda3\envs\ChatEnv\lib\site-packages\starlette\websockets.py", line 114, in _raise_on_disconnect
+    raise WebSocketDisconnect(message["code"], message.get("reason"))
+starlette.websockets.WebSocketDisconnect: (1012, None)
+
+[15:14:19] System: Conversation loop ended.

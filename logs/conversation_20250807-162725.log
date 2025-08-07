@@ -1,0 +1,13 @@
+[16:27:25] CharacterManager: Initializing CharacterManager.
+[16:27:25] LLMFactory: Initializing LLMFactory.
+[16:27:25] LLMFactory: LLMFactory initialized.
+[16:27:25] LLMInstanceManager: Initializing LLMInstanceManager.
+[16:27:25] LLMFactory: Initializing LLMFactory.
+[16:27:25] LLMFactory: LLMFactory initialized.
+[16:27:25] LLMInstanceManager: LLMInstanceManager initialized.
+[16:27:25] PersonaManager: Initializing PersonaManager.
+[16:27:25] PersonaManager: Personas loaded successfully.
+[16:27:25] PersonaManager: PersonaManager initialized.
+[16:27:25] CharacterManager: CharacterManager initialized.
+[16:27:25] System: Application started.
+[17:14:02] System: Application shutdown.

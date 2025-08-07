@@ -1,0 +1,58 @@
+[15:35:36] CharacterManager: Initializing CharacterManager.
+[15:35:36] LLMFactory: Initializing LLMFactory.
+[15:35:36] LLMFactory: LLMFactory initialized.
+[15:35:36] LLMInstanceManager: Initializing LLMInstanceManager.
+[15:35:36] LLMFactory: Initializing LLMFactory.
+[15:35:36] LLMFactory: LLMFactory initialized.
+[15:35:36] LLMInstanceManager: LLMInstanceManager initialized.
+[15:35:36] PersonaManager: Initializing PersonaManager.
+[15:35:36] PersonaManager: Personas loaded successfully.
+[15:35:36] PersonaManager: PersonaManager initialized.
+[15:35:36] CharacterManager: CharacterManager initialized.
+[15:35:36] System: Application started.
+[15:49:20] System: WebSocket connection established.
+[15:49:20] System: WebSocket connection accepted.
+[15:49:20] CharacterManager: Listing all characters.
+[15:49:20] System: Character configuration sent to client.
+[15:49:20] System: Error in WebSocket endpoint: [Errno 2] No such file or directory: ''
+Traceback (most recent call last):
+  File "E:\GenerativeAI\LlmMultiChat\LLM\main.py", line 57, in ws_endpoint
+    await wm.websocket_endpoint(websocket, manager)
+  File "E:\GenerativeAI\LlmMultiChat\LLM\websocket_manager.py", line 11, in websocket_endpoint
+    write_log(log_filename, "WebSocketManager", "WebSocket endpoint activated.")
+  File "E:\GenerativeAI\LlmMultiChat\LLM\log_manager.py", line 18, in write_log
+    with open(filename, 'a', encoding='utf-8') as f:
+FileNotFoundError: [Errno 2] No such file or directory: ''
+
+[15:49:20] System: WebSocket connection closed.
+[15:49:28] System: WebSocket connection established.
+[15:49:28] System: WebSocket connection accepted.
+[15:49:28] CharacterManager: Listing all characters.
+[15:49:28] System: Character configuration sent to client.
+[15:49:28] System: Error in WebSocket endpoint: [Errno 2] No such file or directory: ''
+Traceback (most recent call last):
+  File "E:\GenerativeAI\LlmMultiChat\LLM\main.py", line 57, in ws_endpoint
+    await wm.websocket_endpoint(websocket, manager)
+  File "E:\GenerativeAI\LlmMultiChat\LLM\websocket_manager.py", line 11, in websocket_endpoint
+    write_log(log_filename, "WebSocketManager", "WebSocket endpoint activated.")
+  File "E:\GenerativeAI\LlmMultiChat\LLM\log_manager.py", line 18, in write_log
+    with open(filename, 'a', encoding='utf-8') as f:
+FileNotFoundError: [Errno 2] No such file or directory: ''
+
+[15:49:28] System: WebSocket connection closed.
+[15:49:29] System: WebSocket connection established.
+[15:49:29] System: WebSocket connection accepted.
+[15:49:29] CharacterManager: Listing all characters.
+[15:49:29] System: Character configuration sent to client.
+[15:49:29] System: Error in WebSocket endpoint: [Errno 2] No such file or directory: ''
+Traceback (most recent call last):
+  File "E:\GenerativeAI\LlmMultiChat\LLM\main.py", line 57, in ws_endpoint
+    await wm.websocket_endpoint(websocket, manager)
+  File "E:\GenerativeAI\LlmMultiChat\LLM\websocket_manager.py", line 11, in websocket_endpoint
+    write_log(log_filename, "WebSocketManager", "WebSocket endpoint activated.")
+  File "E:\GenerativeAI\LlmMultiChat\LLM\log_manager.py", line 18, in write_log
+    with open(filename, 'a', encoding='utf-8') as f:
+FileNotFoundError: [Errno 2] No such file or directory: ''
+
+[15:49:29] System: WebSocket connection closed.
+[15:59:47] System: Application shutdown.

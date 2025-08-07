@@ -1,0 +1,96 @@
+[14:54:17] CharacterManager: Initializing CharacterManager.
+[14:54:17] LLMInstanceManager: Initializing LLMInstanceManager.
+[14:54:17] LLMInstanceManager: Starting LLM connection setup.
+[14:54:17] LLMFactory: Attempting to create LLM for provider: ollama, model: 7shi/llm-jp-3-ezo-humanities:3.7b-instruct-q8_0
+[14:54:17] LLMFactory: Successfully created LLM for provider: ollama, model: 7shi/llm-jp-3-ezo-humanities:3.7b-instruct-q8_0
+[14:54:17] LLMInstanceManager: Successfully connected LLM for LUMINA: ollama/7shi/llm-jp-3-ezo-humanities:3.7b-instruct-q8_0 @ http://192.168.1.33:11434
+[14:54:17] LLMFactory: Attempting to create LLM for provider: ollama, model: amoral-gemma3:latest
+[14:54:17] LLMFactory: Successfully created LLM for provider: ollama, model: amoral-gemma3:latest
+[14:54:17] LLMInstanceManager: Successfully connected LLM for CLARIS: ollama/amoral-gemma3:latest @ http://192.168.1.33:11434
+[14:54:17] LLMFactory: Attempting to create LLM for provider: ollama, model: deepseek-r1:1.5b
+[14:54:17] LLMFactory: Successfully created LLM for provider: ollama, model: deepseek-r1:1.5b
+[14:54:17] LLMInstanceManager: Successfully connected LLM for NOX: ollama/deepseek-r1:1.5b @ http://192.168.1.33:11434
+[14:54:17] LLMInstanceManager: LLM connection setup completed.
+[14:54:17] PersonaManager: Initializing PersonaManager with path: LLM/personas.yaml
+[14:54:17] PersonaManager: Personas loaded successfully.
+[14:54:17] CharacterManager: CharacterManager initialized.
+[14:54:18] System: FastAPI application startup.
+[14:54:20] System: WebSocket connection established.
+[14:54:20] System: WebSocket connection accepted.
+[14:54:20] CharacterManager: Listing all characters.
+[14:54:20] CharacterManager: Characters listed.
+[14:54:20] System: Character configuration sent to client.
+[14:54:20] WebSocketManager: WebSocket endpoint activated.
+[14:54:20] WebSocketManager: WebSocket accepted.
+[14:54:20] System: Setting initial statuses.
+[14:54:20] CharacterManager: Getting character names.
+[14:54:20] CharacterManager: Character names retrieved.
+[14:54:20] System: Target characters for initial status: ['ルミナ', 'クラリス', 'ノクス']
+[14:54:20] StatusManager: Updating all statuses to ACTIVE for characters: ['ルミナ', 'クラリス', 'ノクス']
+[14:54:20] StatusManager: Updating status for character: ルミナ to ACTIVE
+[14:54:20] StatusManager: Status updated for character: ルミナ to ACTIVE
+[14:54:20] StatusManager: Updating status for character: クラリス to ACTIVE
+[14:54:20] StatusManager: Status updated for character: クラリス to ACTIVE
+[14:54:20] StatusManager: Updating status for character: ノクス to ACTIVE
+[14:54:20] StatusManager: Status updated for character: ノクス to ACTIVE
+[14:54:20] StatusManager: All statuses updated to ACTIVE.
+[14:54:20] System: Initial statuses set to ACTIVE.
+[14:54:22] WebSocketManager: WebSocket endpoint deactivated.
+[14:54:22] System: WebSocket connection closed.
+[14:54:22] System: WebSocket connection established.
+[14:54:22] System: WebSocket connection accepted.
+[14:54:22] CharacterManager: Listing all characters.
+[14:54:22] CharacterManager: Characters listed.
+[14:54:22] System: Character configuration sent to client.
+[14:54:22] WebSocketManager: WebSocket endpoint activated.
+[14:54:22] WebSocketManager: WebSocket accepted.
+[14:54:22] System: Setting initial statuses.
+[14:54:22] CharacterManager: Getting character names.
+[14:54:22] CharacterManager: Character names retrieved.
+[14:54:22] System: Target characters for initial status: ['ルミナ', 'クラリス', 'ノクス']
+[14:54:22] StatusManager: Updating all statuses to ACTIVE for characters: ['ルミナ', 'クラリス', 'ノクス']
+[14:54:22] StatusManager: Updating status for character: ルミナ to ACTIVE
+[14:54:22] StatusManager: Status updated for character: ルミナ to ACTIVE
+[14:54:22] StatusManager: Updating status for character: クラリス to ACTIVE
+[14:54:22] StatusManager: Status updated for character: クラリス to ACTIVE
+[14:54:22] StatusManager: Updating status for character: ノクス to ACTIVE
+[14:54:22] StatusManager: Status updated for character: ノクス to ACTIVE
+[14:54:22] StatusManager: All statuses updated to ACTIVE.
+[14:54:22] System: Initial statuses set to ACTIVE.
+[14:54:29] CharacterManager: Getting character names.
+[14:54:29] CharacterManager: Character names retrieved.
+[14:54:29] StatusManager: Updating all statuses to IDLE for characters: ['ルミナ', 'クラリス', 'ノクス']
+[14:54:29] StatusManager: Updating status for character: ルミナ to IDLE
+[14:54:29] StatusManager: Status updated for character: ルミナ to IDLE
+[14:54:29] StatusManager: Updating status for character: クラリス to IDLE
+[14:54:29] StatusManager: Status updated for character: クラリス to IDLE
+[14:54:29] StatusManager: Updating status for character: ノクス to IDLE
+[14:54:29] StatusManager: Status updated for character: ノクス to IDLE
+[14:54:29] StatusManager: All statuses updated to IDLE.
+[14:54:29] CharacterManager: Getting character names.
+[14:54:29] CharacterManager: Character names retrieved.
+[14:54:29] CharacterManager: Getting LLM for character: ルミナ
+[14:54:29] LLMInstanceManager: Getting LLM instance for character: ルミナ
+[14:54:29] LLMInstanceManager: LLM instance not found for character: ルミナ
+[14:54:29] CharacterManager: LLM retrieved for character: ルミナ
+[14:54:29] CharacterManager: Getting LLM for character: クラリス
+[14:54:29] LLMInstanceManager: Getting LLM instance for character: クラリス
+[14:54:29] LLMInstanceManager: LLM instance not found for character: クラリス
+[14:54:29] CharacterManager: LLM retrieved for character: クラリス
+[14:54:29] CharacterManager: Getting LLM for character: ノクス
+[14:54:29] LLMInstanceManager: Getting LLM instance for character: ノクス
+[14:54:29] LLMInstanceManager: LLM instance not found for character: ノクス
+[14:54:29] CharacterManager: LLM retrieved for character: ノクス
+[14:54:29] CharacterManager: Getting character names.
+[14:54:29] CharacterManager: Character names retrieved.
+[14:54:29] StatusManager: Updating all statuses to ACTIVE for characters: ['ルミナ', 'クラリス', 'ノクス']
+[14:54:29] StatusManager: Updating status for character: ルミナ to ACTIVE
+[14:54:29] StatusManager: Status updated for character: ルミナ to ACTIVE
+[14:54:29] StatusManager: Updating status for character: クラリス to ACTIVE
+[14:54:29] StatusManager: Status updated for character: クラリス to ACTIVE
+[14:54:29] StatusManager: Updating status for character: ノクス to ACTIVE
+[14:54:29] StatusManager: Status updated for character: ノクス to ACTIVE
+[14:54:29] StatusManager: All statuses updated to ACTIVE.
+[15:00:45] WebSocketManager: WebSocket endpoint deactivated.
+[15:00:45] System: WebSocket connection closed.
+[15:00:45] System: FastAPI application shutdown.

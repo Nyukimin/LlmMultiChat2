@@ -10,10 +10,19 @@ def create_log_filename():
     timestamp = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
     return os.path.join(LOG_DIR, f"conversation_{timestamp}.log")
 
+def create_operation_log_filename():
+    return f"logs/operation_{datetime.datetime.now().strftime('%Y%m%d-%H%M%S')}.log"
+
 def write_log(filename: str, speaker: str, text: str):
     timestamp = datetime.datetime.now().strftime("%H:%M:%S")
     with open(filename, 'a', encoding='utf-8') as f:
         f.write(f"[{timestamp}] {speaker}: {text}\n")
+
+def write_operation_log(filename, level, module, message):
+    os.makedirs(os.path.dirname(filename), exist_ok=True)
+    timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    with open(filename, 'a', encoding='utf-8') as f:
+        f.write(f"[{timestamp}] [{level}] [{module}] {message}\n")
 
 def read_log(filename: str) -> str:
     if not os.path.exists(filename):
