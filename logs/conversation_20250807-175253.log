@@ -1,0 +1,156 @@
+[17:52:53] CharacterManager: Initializing CharacterManager.
+[17:52:53] LLMFactory: Initializing LLMFactory.
+[17:52:53] LLMFactory: LLMFactory initialized.
+[17:52:53] LLMInstanceManager: Initializing LLMInstanceManager.
+[17:52:53] LLMFactory: Initializing LLMFactory.
+[17:52:53] LLMFactory: LLMFactory initialized.
+[17:52:54] LLMInstanceManager: LLMInstanceManager initialized.
+[17:52:54] PersonaManager: Initializing PersonaManager.
+[17:52:54] PersonaManager: Personas loaded successfully.
+[17:52:54] PersonaManager: PersonaManager initialized.
+[17:52:54] CharacterManager: CharacterManager initialized.
+[17:52:54] System: WebSocket connection established.
+[17:52:54] System: WebSocket connection accepted.
+[17:52:54] CharacterManager: Listing all characters.
+[17:52:54] System: Character configuration sent to client.
+[17:52:54] WebSocketManager: WebSocket endpoint activated.
+[17:52:54] WebSocketManager: WebSocket accepted.
+[17:52:54] System: Conversation loop started.
+[17:52:54] InitialStatusSetter: Setting initial statuses for characters.
+[17:52:54] CharacterManager: Getting character names.
+[17:52:54] CharacterManager: Character names retrieved.
+[17:52:54] StatusManager: Updating status for all characters to ACTIVE.
+[17:52:54] StatusManager: Updating status for ルミナ to ACTIVE.
+[17:52:54] StatusManager: Status updated for ルミナ to ACTIVE.
+[17:52:54] StatusManager: Updating status for クラリス to ACTIVE.
+[17:52:54] StatusManager: Status updated for クラリス to ACTIVE.
+[17:52:54] StatusManager: Updating status for ノクス to ACTIVE.
+[17:52:54] StatusManager: Status updated for ノクス to ACTIVE.
+[17:52:54] StatusManager: Status updated for all characters to ACTIVE.
+[17:52:54] InitialStatusSetter: Initial statuses set for all characters.
+[17:52:54] System: Waiting for user input...
+[17:53:01] USER: こんにちは
+[17:53:01] CharacterManager: Getting character names.
+[17:53:01] CharacterManager: Character names retrieved.
+[17:53:01] StatusManager: Updating status for all characters to IDLE.
+[17:53:01] StatusManager: Updating status for ルミナ to IDLE.
+[17:53:01] StatusManager: Status updated for ルミナ to IDLE.
+[17:53:01] StatusManager: Updating status for クラリス to IDLE.
+[17:53:01] StatusManager: Status updated for クラリス to IDLE.
+[17:53:01] StatusManager: Updating status for ノクス to IDLE.
+[17:53:01] StatusManager: Status updated for ノクス to IDLE.
+[17:53:01] StatusManager: Status updated for all characters to IDLE.
+[17:53:01] CharacterManager: Getting character names.
+[17:53:01] CharacterManager: Character names retrieved.
+[17:53:01] CharacterManager: Getting LLM for ルミナ.
+[17:53:01] LLMInstanceManager: Getting LLM instance for ルミナ.
+[17:53:01] LLMInstanceManager: Creating new LLM instance for ルミナ.
+[17:53:01] LLMFactory: Creating LLM with provider: ollama, model: 7shi/llm-jp-3-ezo-humanities:3.7b-instruct-q8_0
+[17:53:01] LLMFactory: Creating Ollama LLM with model: 7shi/llm-jp-3-ezo-humanities:3.7b-instruct-q8_0, base_url: http://192.168.1.33:11434
+[17:53:01] LLMFactory: Ollama LLM created with model: 7shi/llm-jp-3-ezo-humanities:3.7b-instruct-q8_0
+[17:53:01] LLMInstanceManager: LLM instance created and stored for ルミナ.
+[17:53:01] LLMInstanceManager: LLM instance retrieved for ルミナ.
+[17:53:01] CharacterManager: LLM retrieved for ルミナ.
+[17:53:01] System: Processing response for ルミナ
+[17:53:01] StatusManager: Updating status for ルミナ to THINKING.
+[17:53:01] StatusManager: Status updated for ルミナ to THINKING.
+[17:53:01] CharacterManager: Getting persona prompt for ルミナ.
+[17:53:01] PersonaManager: Getting persona prompt for ルミナ.
+[17:53:01] PersonaManager: Persona prompt found for ルミナ.
+[17:53:01] CharacterManager: Persona prompt retrieved for ルミナ.
+[17:53:01] CharacterManager: Getting character names.
+[17:53:01] CharacterManager: Character names retrieved.
+[17:53:01] System: Invoking LLM for ルミナ
+[17:53:03] ルミナ: こんにちは！今日はどんなことをお話ししましょうか？
+[17:53:03] System: Response sent for ルミナ
+[17:53:03] StatusManager: Updating status for ルミナ to IDLE.
+[17:53:03] StatusManager: Status updated for ルミナ to IDLE.
+[17:53:04] CharacterManager: Getting LLM for クラリス.
+[17:53:04] LLMInstanceManager: Getting LLM instance for クラリス.
+[17:53:04] LLMInstanceManager: Creating new LLM instance for クラリス.
+[17:53:04] LLMFactory: Creating LLM with provider: ollama, model: amoral-gemma3:latest
+[17:53:04] LLMFactory: Creating Ollama LLM with model: amoral-gemma3:latest, base_url: http://192.168.1.33:11434
+[17:53:04] LLMFactory: Ollama LLM created with model: amoral-gemma3:latest
+[17:53:04] LLMInstanceManager: LLM instance created and stored for クラリス.
+[17:53:04] LLMInstanceManager: LLM instance retrieved for クラリス.
+[17:53:04] CharacterManager: LLM retrieved for クラリス.
+[17:53:04] System: Processing response for クラリス
+[17:53:04] StatusManager: Updating status for クラリス to THINKING.
+[17:53:04] StatusManager: Status updated for クラリス to THINKING.
+[17:53:04] CharacterManager: Getting persona prompt for クラリス.
+[17:53:04] PersonaManager: Getting persona prompt for クラリス.
+[17:53:04] PersonaManager: Persona prompt found for クラリス.
+[17:53:04] CharacterManager: Persona prompt retrieved for クラリス.
+[17:53:04] CharacterManager: Getting character names.
+[17:53:04] CharacterManager: Character names retrieved.
+[17:53:04] System: Invoking LLM for クラリス
+[17:53:08] クラリス: 
+クラリス: こんにちは！今日はどんなことをお話ししましょうか？
+[Next: ルミナ]
+
+[17:53:08] System: Response sent for クラリス
+[17:53:08] StatusManager: Updating status for クラリス to IDLE.
+[17:53:08] StatusManager: Status updated for クラリス to IDLE.
+[17:53:09] CharacterManager: Getting character names.
+[17:53:09] CharacterManager: Character names retrieved.
+[17:53:09] CharacterManager: Getting LLM for ノクス.
+[17:53:09] LLMInstanceManager: Getting LLM instance for ノクス.
+[17:53:09] LLMInstanceManager: Creating new LLM instance for ノクス.
+[17:53:09] LLMFactory: Creating LLM with provider: ollama, model: deepseek-r1:1.5b
+[17:53:09] LLMFactory: Creating Ollama LLM with model: deepseek-r1:1.5b, base_url: http://192.168.1.33:11434
+[17:53:09] LLMFactory: Ollama LLM created with model: deepseek-r1:1.5b
+[17:53:09] LLMInstanceManager: LLM instance created and stored for ノクス.
+[17:53:09] LLMInstanceManager: LLM instance retrieved for ノクス.
+[17:53:09] CharacterManager: LLM retrieved for ノクス.
+[17:53:09] System: Processing response for ノクス
+[17:53:09] StatusManager: Updating status for ノクス to THINKING.
+[17:53:09] StatusManager: Status updated for ノクス to THINKING.
+[17:53:09] CharacterManager: Getting persona prompt for ノクス.
+[17:53:09] PersonaManager: Getting persona prompt for ノクス.
+[17:53:09] PersonaManager: Persona prompt found for ノクス.
+[17:53:09] CharacterManager: Persona prompt retrieved for ノクス.
+[17:53:09] CharacterManager: Getting character names.
+[17:53:09] CharacterManager: Character names retrieved.
+[17:53:09] System: Invoking LLM for ノクス
+[17:53:14] ノクス: <think>
+Okay, I'm trying to figure out how to respond to this situation. The user has sent a message starting with "Human: こんにちは", which is just a standard greeting in Japanese, meaning "Hello!". 
+
+Looking at the conversation history provided earlier, it seems like the character system is setting up for a chatbot called "ノクス". From the messages, I can see that the status manager is keeping track of all characters' statuses. Initially, everything is set to 'IDENTLE', but as each character interacts with the bot, their statuses are changed.
+
+The conversation so far involved the user greeting with "こんにちは", and then the bot responds accordingly. The system processes this message by gathering more information about each character. However, in the current context, the bot's response after receiving "こんにちは" is already set to think and send a thought prompt.
+
+So, when I receive "こんにちは", I should respond with a friendly greeting like "こんにちは！今天有什么想聊的吗？" which means "Hello! Today, what can we chat about?" This way, the bot knows it's ready for further interaction. 
+
+I also need to make sure that my response doesn't include any technical jargon or unnecessary details since I'm following the guidelines to keep responses in Japanese without using markdown or special formatting. Additionally, I should maintain the structure of the conversation and adhere to the setting where "ノクス" is the primary character.
+
+Overall, my goal is to provide a welcoming initial response that sets up for further interaction with the bot, ensuring consistency with the system's expectations.
+</think>
+
+こんにちは！今天有什么想聊的吗？
+[17:53:14] System: Response sent for ノクス
+[17:53:14] StatusManager: Updating status for ノクス to IDLE.
+[17:53:14] StatusManager: Status updated for ノクス to IDLE.
+[17:53:15] CharacterManager: Getting character names.
+[17:53:15] CharacterManager: Character names retrieved.
+[17:53:15] StatusManager: Updating status for all characters to ACTIVE.
+[17:53:15] StatusManager: Updating status for ルミナ to ACTIVE.
+[17:53:15] StatusManager: Status updated for ルミナ to ACTIVE.
+[17:53:15] StatusManager: Updating status for クラリス to ACTIVE.
+[17:53:15] StatusManager: Status updated for クラリス to ACTIVE.
+[17:53:15] StatusManager: Updating status for ノクス to ACTIVE.
+[17:53:15] StatusManager: Status updated for ノクス to ACTIVE.
+[17:53:15] StatusManager: Status updated for all characters to ACTIVE.
+[17:53:15] System: Waiting for user input...
+[17:53:42] System: Error in conversation loop: (1012, None)
+Traceback (most recent call last):
+  File "E:\GenerativeAI\LlmMultiChat\LLM\conversation_loop.py", line 136, in conversation_loop
+    user_query = await websocket.receive_text()
+  File "C:\Users\nyuki\miniconda3\envs\ChatEnv\lib\site-packages\starlette\websockets.py", line 120, in receive_text
+    self._raise_on_disconnect(message)
+  File "C:\Users\nyuki\miniconda3\envs\ChatEnv\lib\site-packages\starlette\websockets.py", line 114, in _raise_on_disconnect
+    raise WebSocketDisconnect(message["code"], message.get("reason"))
+starlette.websockets.WebSocketDisconnect: (1012, None)
+
+[17:53:42] System: Conversation loop ended.
+[17:53:42] WebSocketManager: WebSocket endpoint finished.
+[17:53:42] System: WebSocket connection closed.

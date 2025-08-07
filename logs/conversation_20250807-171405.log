@@ -25,3 +25,4 @@ Traceback (most recent call last):
 FileNotFoundError: [Errno 2] No such file or directory: ''
 
 [17:14:28] System: WebSocket connection closed.
+[17:29:37] System: Application shutdown.

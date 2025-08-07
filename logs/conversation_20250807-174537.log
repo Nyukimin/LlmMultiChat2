@@ -1,0 +1,144 @@
+[17:45:37] CharacterManager: Initializing CharacterManager.
+[17:45:37] LLMFactory: Initializing LLMFactory.
+[17:45:37] LLMFactory: LLMFactory initialized.
+[17:45:37] LLMInstanceManager: Initializing LLMInstanceManager.
+[17:45:37] LLMFactory: Initializing LLMFactory.
+[17:45:37] LLMFactory: LLMFactory initialized.
+[17:45:37] LLMInstanceManager: LLMInstanceManager initialized.
+[17:45:37] PersonaManager: Initializing PersonaManager.
+[17:45:37] PersonaManager: Personas loaded successfully.
+[17:45:37] PersonaManager: PersonaManager initialized.
+[17:45:37] CharacterManager: CharacterManager initialized.
+[17:45:37] System: WebSocket connection established.
+[17:45:37] System: WebSocket connection accepted.
+[17:45:37] CharacterManager: Listing all characters.
+[17:45:37] System: Character configuration sent to client.
+[17:45:37] WebSocketManager: WebSocket endpoint activated.
+[17:45:37] WebSocketManager: WebSocket accepted.
+[17:45:37] System: Conversation loop started.
+[17:45:37] InitialStatusSetter: Setting initial statuses for characters.
+[17:45:37] CharacterManager: Getting character names.
+[17:45:37] CharacterManager: Character names retrieved.
+[17:45:37] StatusManager: Updating status for all characters to ACTIVE.
+[17:45:37] StatusManager: Updating status for ルミナ to ACTIVE.
+[17:45:37] StatusManager: Status updated for ルミナ to ACTIVE.
+[17:45:37] StatusManager: Updating status for クラリス to ACTIVE.
+[17:45:37] StatusManager: Status updated for クラリス to ACTIVE.
+[17:45:37] StatusManager: Updating status for ノクス to ACTIVE.
+[17:45:37] StatusManager: Status updated for ノクス to ACTIVE.
+[17:45:37] StatusManager: Status updated for all characters to ACTIVE.
+[17:45:37] InitialStatusSetter: Initial statuses set for all characters.
+[17:45:37] System: Waiting for user input...
+[17:45:43] USER: こんにちは
+[17:45:43] CharacterManager: Getting character names.
+[17:45:43] CharacterManager: Character names retrieved.
+[17:45:43] StatusManager: Updating status for all characters to IDLE.
+[17:45:43] StatusManager: Updating status for ルミナ to IDLE.
+[17:45:43] StatusManager: Status updated for ルミナ to IDLE.
+[17:45:43] StatusManager: Updating status for クラリス to IDLE.
+[17:45:43] StatusManager: Status updated for クラリス to IDLE.
+[17:45:43] StatusManager: Updating status for ノクス to IDLE.
+[17:45:43] StatusManager: Status updated for ノクス to IDLE.
+[17:45:43] StatusManager: Status updated for all characters to IDLE.
+[17:45:43] CharacterManager: Getting character names.
+[17:45:43] CharacterManager: Character names retrieved.
+[17:45:43] CharacterManager: Getting LLM for ルミナ.
+[17:45:43] LLMInstanceManager: Getting LLM instance for ルミナ.
+[17:45:43] LLMInstanceManager: Creating new LLM instance for ルミナ.
+[17:45:43] LLMFactory: Creating LLM with provider: ollama, model: 7shi/llm-jp-3-ezo-humanities:3.7b-instruct-q8_0
+[17:45:43] LLMFactory: Creating Ollama LLM with model: 7shi/llm-jp-3-ezo-humanities:3.7b-instruct-q8_0, base_url: http://192.168.1.33:11434
+[17:45:43] LLMFactory: Ollama LLM created with model: 7shi/llm-jp-3-ezo-humanities:3.7b-instruct-q8_0
+[17:45:43] LLMInstanceManager: LLM instance created and stored for ルミナ.
+[17:45:43] LLMInstanceManager: LLM instance retrieved for ルミナ.
+[17:45:43] CharacterManager: LLM retrieved for ルミナ.
+[17:45:43] System: Processing response for ルミナ
+[17:45:43] StatusManager: Updating status for ルミナ to THINKING.
+[17:45:43] StatusManager: Status updated for ルミナ to THINKING.
+[17:45:43] CharacterManager: Getting persona prompt for ルミナ.
+[17:45:43] PersonaManager: Getting persona prompt for ルミナ.
+[17:45:43] PersonaManager: Persona prompt found for ルミナ.
+[17:45:43] CharacterManager: Persona prompt retrieved for ルミナ.
+[17:45:43] CharacterManager: Getting character names.
+[17:45:43] CharacterManager: Character names retrieved.
+[17:45:43] System: Invoking LLM for ルミナ
+[17:45:45] ルミナ: こんにちは、ルミナです！お話しできるのを楽しみにしていました。どうぞよろしくお願いいたします。
+[17:45:45] System: Response sent for ルミナ
+[17:45:45] StatusManager: Updating status for ルミナ to IDLE.
+[17:45:45] StatusManager: Status updated for ルミナ to IDLE.
+[17:45:46] CharacterManager: Getting LLM for クラリス.
+[17:45:46] LLMInstanceManager: Getting LLM instance for クラリス.
+[17:45:47] LLMInstanceManager: Creating new LLM instance for クラリス.
+[17:45:47] LLMFactory: Creating LLM with provider: ollama, model: amoral-gemma3:latest
+[17:45:47] LLMFactory: Creating Ollama LLM with model: amoral-gemma3:latest, base_url: http://192.168.1.33:11434
+[17:45:47] LLMFactory: Ollama LLM created with model: amoral-gemma3:latest
+[17:45:47] LLMInstanceManager: LLM instance created and stored for クラリス.
+[17:45:47] LLMInstanceManager: LLM instance retrieved for クラリス.
+[17:45:47] CharacterManager: LLM retrieved for クラリス.
+[17:45:47] System: Processing response for クラリス
+[17:45:47] StatusManager: Updating status for クラリス to THINKING.
+[17:45:47] StatusManager: Status updated for クラリス to THINKING.
+[17:45:47] CharacterManager: Getting persona prompt for クラリス.
+[17:45:47] PersonaManager: Getting persona prompt for クラリス.
+[17:45:47] PersonaManager: Persona prompt found for クラリス.
+[17:45:47] CharacterManager: Persona prompt retrieved for クラリス.
+[17:45:47] CharacterManager: Getting character names.
+[17:45:47] CharacterManager: Character names retrieved.
+[17:45:47] System: Invoking LLM for クラリス
+[17:45:50] クラリス: 、ルミナです。何か質問はありますか？
+[Next: ルミナ]
+
+[17:45:50] System: Response sent for クラリス
+[17:45:50] StatusManager: Updating status for クラリス to IDLE.
+[17:45:50] StatusManager: Status updated for クラリス to IDLE.
+[17:45:51] CharacterManager: Getting LLM for ノクス.
+[17:45:51] LLMInstanceManager: Getting LLM instance for ノクス.
+[17:45:51] LLMInstanceManager: Creating new LLM instance for ノクス.
+[17:45:51] LLMFactory: Creating LLM with provider: ollama, model: deepseek-r1:1.5b
+[17:45:51] LLMFactory: Creating Ollama LLM with model: deepseek-r1:1.5b, base_url: http://192.168.1.33:11434
+[17:45:51] LLMFactory: Ollama LLM created with model: deepseek-r1:1.5b
+[17:45:51] LLMInstanceManager: LLM instance created and stored for ノクス.
+[17:45:51] LLMInstanceManager: LLM instance retrieved for ノクス.
+[17:45:51] CharacterManager: LLM retrieved for ノクス.
+[17:45:51] System: Processing response for ノクス
+[17:45:51] StatusManager: Updating status for ノクス to THINKING.
+[17:45:51] StatusManager: Status updated for ノクス to THINKING.
+[17:45:51] CharacterManager: Getting persona prompt for ノクス.
+[17:45:51] PersonaManager: Getting persona prompt for ノクス.
+[17:45:51] PersonaManager: Persona prompt found for ノクス.
+[17:45:51] CharacterManager: Persona prompt retrieved for ノクス.
+[17:45:51] CharacterManager: Getting character names.
+[17:45:51] CharacterManager: Character names retrieved.
+[17:45:51] System: Invoking LLM for ノクス
+[17:45:53] ノクス: <think>
+
+</think>
+
+[Next: humans]
+
+：你好！很高兴见到你。有什么我可以帮助你的吗？
+[17:45:53] System: Response sent for ノクス
+[17:45:53] StatusManager: Updating status for ノクス to IDLE.
+[17:45:53] StatusManager: Status updated for ノクス to IDLE.
+[17:45:54] CharacterManager: Getting character names.
+[17:45:54] CharacterManager: Character names retrieved.
+[17:45:54] StatusManager: Updating status for all characters to ACTIVE.
+[17:45:54] StatusManager: Updating status for ルミナ to ACTIVE.
+[17:45:54] StatusManager: Status updated for ルミナ to ACTIVE.
+[17:45:54] StatusManager: Updating status for クラリス to ACTIVE.
+[17:45:54] StatusManager: Status updated for クラリス to ACTIVE.
+[17:45:54] StatusManager: Updating status for ノクス to ACTIVE.
+[17:45:54] StatusManager: Status updated for ノクス to ACTIVE.
+[17:45:54] StatusManager: Status updated for all characters to ACTIVE.
+[17:45:54] System: Waiting for user input...
+[17:49:48] System: Error in conversation loop: (1012, None)\nTraceback (most recent call last):
+  File "E:\GenerativeAI\LlmMultiChat\LLM\conversation_loop.py", line 26, in conversation_loop
+    character_name: str,
+  File "C:\Users\nyuki\miniconda3\envs\ChatEnv\lib\site-packages\starlette\websockets.py", line 120, in receive_text
+    self._raise_on_disconnect(message)
+  File "C:\Users\nyuki\miniconda3\envs\ChatEnv\lib\site-packages\starlette\websockets.py", line 114, in _raise_on_disconnect
+    raise WebSocketDisconnect(message["code"], message.get("reason"))
+starlette.websockets.WebSocketDisconnect: (1012, None)
+
+[17:49:48] System: Conversation loop ended.
+[17:49:48] WebSocketManager: WebSocket endpoint finished.
+[17:49:48] System: WebSocket connection closed.

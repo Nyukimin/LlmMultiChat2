@@ -1,0 +1,148 @@
+[2025-08-07 17:33:22] [INFO] [Main] Application startup initiated.
+[2025-08-07 17:35:26] [INFO] [Main] Conversation log file created: logs\conversation_20250807-173526.log
+[2025-08-07 17:35:27] [INFO] [WebSocket] New WebSocket connection established.
+[2025-08-07 17:35:27] [INFO] [WebSocket] WebSocket connection accepted.
+[2025-08-07 17:35:27] [INFO] [WebSocket] Character configuration sent to client.
+[2025-08-07 17:35:27] [INFO] [WebSocketManager] WebSocket endpoint activated.
+[2025-08-07 17:35:27] [INFO] [WebSocketManager] WebSocket accepted.
+[2025-08-07 17:35:27] [INFO] [ConversationLoop] Conversation loop started.
+[2025-08-07 17:35:27] [INFO] [InitialStatusSetter] Setting initial statuses for characters.
+[2025-08-07 17:35:27] [INFO] [StatusManager] Updating status for all characters to ACTIVE.
+[2025-08-07 17:35:27] [INFO] [StatusManager] Updating status for ルミナ to ACTIVE.
+[2025-08-07 17:35:27] [INFO] [StatusManager] Status updated for ルミナ to ACTIVE.
+[2025-08-07 17:35:27] [INFO] [StatusManager] Updating status for クラリス to ACTIVE.
+[2025-08-07 17:35:27] [INFO] [StatusManager] Status updated for クラリス to ACTIVE.
+[2025-08-07 17:35:27] [INFO] [StatusManager] Updating status for ノクス to ACTIVE.
+[2025-08-07 17:35:27] [INFO] [StatusManager] Status updated for ノクス to ACTIVE.
+[2025-08-07 17:35:27] [INFO] [StatusManager] Status updated for all characters to ACTIVE.
+[2025-08-07 17:35:27] [INFO] [InitialStatusSetter] Initial statuses set for all characters.
+[2025-08-07 17:35:27] [INFO] [ConversationLoop] Waiting for user input.
+[2025-08-07 17:35:32] [INFO] [ConversationLoop] User input received.
+[2025-08-07 17:35:32] [INFO] [StatusManager] Updating status for all characters to IDLE.
+[2025-08-07 17:35:32] [INFO] [StatusManager] Updating status for ルミナ to IDLE.
+[2025-08-07 17:35:32] [INFO] [StatusManager] Status updated for ルミナ to IDLE.
+[2025-08-07 17:35:32] [INFO] [StatusManager] Updating status for クラリス to IDLE.
+[2025-08-07 17:35:32] [INFO] [StatusManager] Status updated for クラリス to IDLE.
+[2025-08-07 17:35:32] [INFO] [StatusManager] Updating status for ノクス to IDLE.
+[2025-08-07 17:35:32] [INFO] [StatusManager] Status updated for ノクス to IDLE.
+[2025-08-07 17:35:32] [INFO] [StatusManager] Status updated for all characters to IDLE.
+[2025-08-07 17:35:32] [INFO] [ConversationLoop] Processing response for ルミナ.
+[2025-08-07 17:35:32] [INFO] [StatusManager] Updating status for ルミナ to THINKING.
+[2025-08-07 17:35:32] [INFO] [StatusManager] Status updated for ルミナ to THINKING.
+[2025-08-07 17:35:32] [INFO] [ConversationLoop] Invoking LLM for ルミナ.
+[2025-08-07 17:35:34] [INFO] [ConversationLoop] Received response from LLM for ルミナ.
+[2025-08-07 17:35:34] [INFO] [ConversationLoop] Response sent for ルミナ.
+[2025-08-07 17:35:34] [INFO] [StatusManager] Updating status for ルミナ to IDLE.
+[2025-08-07 17:35:34] [INFO] [StatusManager] Status updated for ルミナ to IDLE.
+[2025-08-07 17:35:35] [INFO] [ConversationLoop] Processing response for クラリス.
+[2025-08-07 17:35:35] [INFO] [StatusManager] Updating status for クラリス to THINKING.
+[2025-08-07 17:35:35] [INFO] [StatusManager] Status updated for クラリス to THINKING.
+[2025-08-07 17:35:35] [INFO] [ConversationLoop] Invoking LLM for クラリス.
+[2025-08-07 17:35:38] [INFO] [ConversationLoop] Received response from LLM for クラリス.
+[2025-08-07 17:35:38] [INFO] [ConversationLoop] Response sent for クラリス.
+[2025-08-07 17:35:38] [INFO] [StatusManager] Updating status for クラリス to IDLE.
+[2025-08-07 17:35:38] [INFO] [StatusManager] Status updated for クラリス to IDLE.
+[2025-08-07 17:35:39] [INFO] [ConversationLoop] Processing response for ノクス.
+[2025-08-07 17:35:39] [INFO] [StatusManager] Updating status for ノクス to THINKING.
+[2025-08-07 17:35:39] [INFO] [StatusManager] Status updated for ノクス to THINKING.
+[2025-08-07 17:35:39] [INFO] [ConversationLoop] Invoking LLM for ノクス.
+[2025-08-07 17:35:43] [INFO] [ConversationLoop] Received response from LLM for ノクス.
+[2025-08-07 17:35:43] [INFO] [ConversationLoop] Response sent for ノクス.
+[2025-08-07 17:35:43] [INFO] [StatusManager] Updating status for ノクス to IDLE.
+[2025-08-07 17:35:43] [INFO] [StatusManager] Status updated for ノクス to IDLE.
+[2025-08-07 17:35:44] [INFO] [StatusManager] Updating status for all characters to ACTIVE.
+[2025-08-07 17:35:44] [INFO] [StatusManager] Updating status for ルミナ to ACTIVE.
+[2025-08-07 17:35:44] [INFO] [StatusManager] Status updated for ルミナ to ACTIVE.
+[2025-08-07 17:35:44] [INFO] [StatusManager] Updating status for クラリス to ACTIVE.
+[2025-08-07 17:35:44] [INFO] [StatusManager] Status updated for クラリス to ACTIVE.
+[2025-08-07 17:35:44] [INFO] [StatusManager] Updating status for ノクス to ACTIVE.
+[2025-08-07 17:35:44] [INFO] [StatusManager] Status updated for ノクス to ACTIVE.
+[2025-08-07 17:35:44] [INFO] [StatusManager] Status updated for all characters to ACTIVE.
+[2025-08-07 17:35:44] [INFO] [ConversationLoop] Waiting for user input.
+[2025-08-07 17:44:30] [ERROR] [ConversationLoop] Error in conversation loop: (1001, '')\nTraceback (most recent call last):
+  File "E:\GenerativeAI\LlmMultiChat\LLM\conversation_loop.py", line 26, in conversation_loop
+    user_query = await websocket.receive_text()
+  File "C:\Users\nyuki\miniconda3\envs\ChatEnv\lib\site-packages\starlette\websockets.py", line 120, in receive_text
+    self._raise_on_disconnect(message)
+  File "C:\Users\nyuki\miniconda3\envs\ChatEnv\lib\site-packages\starlette\websockets.py", line 114, in _raise_on_disconnect
+    raise WebSocketDisconnect(message["code"], message.get("reason"))
+starlette.websockets.WebSocketDisconnect: (1001, '')
+
+[2025-08-07 17:44:30] [INFO] [ConversationLoop] Conversation loop ended.
+[2025-08-07 17:44:30] [INFO] [WebSocketManager] Conversation loop completed.
+[2025-08-07 17:44:30] [INFO] [WebSocketManager] WebSocket endpoint finished.
+[2025-08-07 17:44:30] [INFO] [WebSocket] WebSocket connection closed.
+[2025-08-07 17:44:31] [INFO] [Main] Conversation log file created: logs\conversation_20250807-174431.log
+[2025-08-07 17:44:31] [INFO] [WebSocket] New WebSocket connection established.
+[2025-08-07 17:44:31] [INFO] [WebSocket] WebSocket connection accepted.
+[2025-08-07 17:44:31] [INFO] [WebSocket] Character configuration sent to client.
+[2025-08-07 17:44:31] [INFO] [WebSocketManager] WebSocket endpoint activated.
+[2025-08-07 17:44:31] [INFO] [WebSocketManager] WebSocket accepted.
+[2025-08-07 17:44:31] [INFO] [ConversationLoop] Conversation loop started.
+[2025-08-07 17:44:31] [INFO] [InitialStatusSetter] Setting initial statuses for characters.
+[2025-08-07 17:44:31] [INFO] [StatusManager] Updating status for all characters to ACTIVE.
+[2025-08-07 17:44:31] [INFO] [StatusManager] Updating status for ルミナ to ACTIVE.
+[2025-08-07 17:44:31] [INFO] [StatusManager] Status updated for ルミナ to ACTIVE.
+[2025-08-07 17:44:31] [INFO] [StatusManager] Updating status for クラリス to ACTIVE.
+[2025-08-07 17:44:31] [INFO] [StatusManager] Status updated for クラリス to ACTIVE.
+[2025-08-07 17:44:31] [INFO] [StatusManager] Updating status for ノクス to ACTIVE.
+[2025-08-07 17:44:31] [INFO] [StatusManager] Status updated for ノクス to ACTIVE.
+[2025-08-07 17:44:31] [INFO] [StatusManager] Status updated for all characters to ACTIVE.
+[2025-08-07 17:44:31] [INFO] [InitialStatusSetter] Initial statuses set for all characters.
+[2025-08-07 17:44:31] [INFO] [ConversationLoop] Waiting for user input.
+[2025-08-07 17:44:36] [INFO] [ConversationLoop] User input received.
+[2025-08-07 17:44:36] [INFO] [StatusManager] Updating status for all characters to IDLE.
+[2025-08-07 17:44:36] [INFO] [StatusManager] Updating status for ルミナ to IDLE.
+[2025-08-07 17:44:36] [INFO] [StatusManager] Status updated for ルミナ to IDLE.
+[2025-08-07 17:44:36] [INFO] [StatusManager] Updating status for クラリス to IDLE.
+[2025-08-07 17:44:36] [INFO] [StatusManager] Status updated for クラリス to IDLE.
+[2025-08-07 17:44:36] [INFO] [StatusManager] Updating status for ノクス to IDLE.
+[2025-08-07 17:44:36] [INFO] [StatusManager] Status updated for ノクス to IDLE.
+[2025-08-07 17:44:36] [INFO] [StatusManager] Status updated for all characters to IDLE.
+[2025-08-07 17:44:36] [INFO] [ConversationLoop] Processing response for ルミナ.
+[2025-08-07 17:44:36] [INFO] [StatusManager] Updating status for ルミナ to THINKING.
+[2025-08-07 17:44:36] [INFO] [StatusManager] Status updated for ルミナ to THINKING.
+[2025-08-07 17:44:36] [INFO] [ConversationLoop] Invoking LLM for ルミナ.
+[2025-08-07 17:44:38] [INFO] [ConversationLoop] Received response from LLM for ルミナ.
+[2025-08-07 17:44:38] [INFO] [ConversationLoop] Response sent for ルミナ.
+[2025-08-07 17:44:38] [INFO] [StatusManager] Updating status for ルミナ to IDLE.
+[2025-08-07 17:44:38] [INFO] [StatusManager] Status updated for ルミナ to IDLE.
+[2025-08-07 17:44:39] [INFO] [ConversationLoop] Processing response for クラリス.
+[2025-08-07 17:44:39] [INFO] [StatusManager] Updating status for クラリス to THINKING.
+[2025-08-07 17:44:39] [INFO] [StatusManager] Status updated for クラリス to THINKING.
+[2025-08-07 17:44:39] [INFO] [ConversationLoop] Invoking LLM for クラリス.
+[2025-08-07 17:44:42] [INFO] [ConversationLoop] Received response from LLM for クラリス.
+[2025-08-07 17:44:42] [INFO] [ConversationLoop] Response sent for クラリス.
+[2025-08-07 17:44:42] [INFO] [StatusManager] Updating status for クラリス to IDLE.
+[2025-08-07 17:44:42] [INFO] [StatusManager] Status updated for クラリス to IDLE.
+[2025-08-07 17:44:43] [INFO] [ConversationLoop] Processing response for ノクス.
+[2025-08-07 17:44:43] [INFO] [StatusManager] Updating status for ノクス to THINKING.
+[2025-08-07 17:44:43] [INFO] [StatusManager] Status updated for ノクス to THINKING.
+[2025-08-07 17:44:43] [INFO] [ConversationLoop] Invoking LLM for ノクス.
+[2025-08-07 17:44:49] [INFO] [ConversationLoop] Received response from LLM for ノクス.
+[2025-08-07 17:44:49] [INFO] [ConversationLoop] Response sent for ノクス.
+[2025-08-07 17:44:49] [INFO] [StatusManager] Updating status for ノクス to IDLE.
+[2025-08-07 17:44:49] [INFO] [StatusManager] Status updated for ノクス to IDLE.
+[2025-08-07 17:44:50] [INFO] [StatusManager] Updating status for all characters to ACTIVE.
+[2025-08-07 17:44:50] [INFO] [StatusManager] Updating status for ルミナ to ACTIVE.
+[2025-08-07 17:44:50] [INFO] [StatusManager] Status updated for ルミナ to ACTIVE.
+[2025-08-07 17:44:50] [INFO] [StatusManager] Updating status for クラリス to ACTIVE.
+[2025-08-07 17:44:50] [INFO] [StatusManager] Status updated for クラリス to ACTIVE.
+[2025-08-07 17:44:50] [INFO] [StatusManager] Updating status for ノクス to ACTIVE.
+[2025-08-07 17:44:50] [INFO] [StatusManager] Status updated for ノクス to ACTIVE.
+[2025-08-07 17:44:50] [INFO] [StatusManager] Status updated for all characters to ACTIVE.
+[2025-08-07 17:44:50] [INFO] [ConversationLoop] Waiting for user input.
+[2025-08-07 17:45:29] [ERROR] [ConversationLoop] Error in conversation loop: (1012, None)\nTraceback (most recent call last):
+  File "E:\GenerativeAI\LlmMultiChat\LLM\conversation_loop.py", line 26, in conversation_loop
+    user_query = await websocket.receive_text()
+  File "C:\Users\nyuki\miniconda3\envs\ChatEnv\lib\site-packages\starlette\websockets.py", line 120, in receive_text
+    self._raise_on_disconnect(message)
+  File "C:\Users\nyuki\miniconda3\envs\ChatEnv\lib\site-packages\starlette\websockets.py", line 114, in _raise_on_disconnect
+    raise WebSocketDisconnect(message["code"], message.get("reason"))
+starlette.websockets.WebSocketDisconnect: (1012, None)
+
+[2025-08-07 17:45:29] [INFO] [ConversationLoop] Conversation loop ended.
+[2025-08-07 17:45:29] [INFO] [WebSocketManager] Conversation loop completed.
+[2025-08-07 17:45:29] [INFO] [WebSocketManager] WebSocket endpoint finished.
+[2025-08-07 17:45:29] [INFO] [WebSocket] WebSocket connection closed.
+[2025-08-07 17:45:29] [INFO] [Main] Application shutdown completed.

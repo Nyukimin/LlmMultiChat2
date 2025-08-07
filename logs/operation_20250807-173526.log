@@ -1,0 +1,65 @@
+[2025-08-07 17:35:26] [INFO] [CharacterManager] Initializing CharacterManager.
+[2025-08-07 17:35:26] [INFO] [LLMFactory] Initializing LLMFactory.
+[2025-08-07 17:35:26] [INFO] [LLMFactory] LLMFactory initialized.
+[2025-08-07 17:35:26] [INFO] [LLMInstanceManager] Initializing LLMInstanceManager.
+[2025-08-07 17:35:26] [INFO] [LLMFactory] Initializing LLMFactory.
+[2025-08-07 17:35:26] [INFO] [LLMFactory] LLMFactory initialized.
+[2025-08-07 17:35:26] [INFO] [LLMInstanceManager] LLMInstanceManager initialized.
+[2025-08-07 17:35:26] [INFO] [PersonaManager] Initializing PersonaManager.
+[2025-08-07 17:35:27] [INFO] [PersonaManager] Personas loaded successfully.
+[2025-08-07 17:35:27] [INFO] [PersonaManager] PersonaManager initialized.
+[2025-08-07 17:35:27] [INFO] [CharacterManager] CharacterManager initialized.
+[2025-08-07 17:35:27] [INFO] [CharacterManager] Listing all characters.
+[2025-08-07 17:35:27] [INFO] [CharacterManager] Getting character names.
+[2025-08-07 17:35:27] [INFO] [CharacterManager] Character names retrieved.
+[2025-08-07 17:35:32] [INFO] [CharacterManager] Getting character names.
+[2025-08-07 17:35:32] [INFO] [CharacterManager] Character names retrieved.
+[2025-08-07 17:35:32] [INFO] [CharacterManager] Getting character names.
+[2025-08-07 17:35:32] [INFO] [CharacterManager] Character names retrieved.
+[2025-08-07 17:35:32] [INFO] [CharacterManager] Getting LLM for ルミナ.
+[2025-08-07 17:35:32] [INFO] [LLMInstanceManager] Getting LLM instance for ルミナ.
+[2025-08-07 17:35:32] [INFO] [LLMInstanceManager] Creating new LLM instance for ルミナ.
+[2025-08-07 17:35:32] [INFO] [LLMFactory] Creating LLM with provider: ollama, model: 7shi/llm-jp-3-ezo-humanities:3.7b-instruct-q8_0
+[2025-08-07 17:35:32] [INFO] [LLMFactory] Creating Ollama LLM with model: 7shi/llm-jp-3-ezo-humanities:3.7b-instruct-q8_0, base_url: http://192.168.1.33:11434
+[2025-08-07 17:35:32] [INFO] [LLMFactory] Ollama LLM created with model: 7shi/llm-jp-3-ezo-humanities:3.7b-instruct-q8_0
+[2025-08-07 17:35:32] [INFO] [LLMInstanceManager] LLM instance created and stored for ルミナ.
+[2025-08-07 17:35:32] [INFO] [LLMInstanceManager] LLM instance retrieved for ルミナ.
+[2025-08-07 17:35:32] [INFO] [CharacterManager] LLM retrieved for ルミナ.
+[2025-08-07 17:35:32] [INFO] [CharacterManager] Getting persona prompt for ルミナ.
+[2025-08-07 17:35:32] [INFO] [PersonaManager] Getting persona prompt for ルミナ.
+[2025-08-07 17:35:32] [WARNING] [PersonaManager] No persona prompt found for ルミナ.
+[2025-08-07 17:35:32] [INFO] [CharacterManager] Persona prompt retrieved for ルミナ.
+[2025-08-07 17:35:32] [INFO] [CharacterManager] Getting character names.
+[2025-08-07 17:35:32] [INFO] [CharacterManager] Character names retrieved.
+[2025-08-07 17:35:35] [INFO] [CharacterManager] Getting LLM for クラリス.
+[2025-08-07 17:35:35] [INFO] [LLMInstanceManager] Getting LLM instance for クラリス.
+[2025-08-07 17:35:35] [INFO] [LLMInstanceManager] Creating new LLM instance for クラリス.
+[2025-08-07 17:35:35] [INFO] [LLMFactory] Creating LLM with provider: ollama, model: amoral-gemma3:latest
+[2025-08-07 17:35:35] [INFO] [LLMFactory] Creating Ollama LLM with model: amoral-gemma3:latest, base_url: http://192.168.1.33:11434
+[2025-08-07 17:35:35] [INFO] [LLMFactory] Ollama LLM created with model: amoral-gemma3:latest
+[2025-08-07 17:35:35] [INFO] [LLMInstanceManager] LLM instance created and stored for クラリス.
+[2025-08-07 17:35:35] [INFO] [LLMInstanceManager] LLM instance retrieved for クラリス.
+[2025-08-07 17:35:35] [INFO] [CharacterManager] LLM retrieved for クラリス.
+[2025-08-07 17:35:35] [INFO] [CharacterManager] Getting persona prompt for クラリス.
+[2025-08-07 17:35:35] [INFO] [PersonaManager] Getting persona prompt for クラリス.
+[2025-08-07 17:35:35] [WARNING] [PersonaManager] No persona prompt found for クラリス.
+[2025-08-07 17:35:35] [INFO] [CharacterManager] Persona prompt retrieved for クラリス.
+[2025-08-07 17:35:35] [INFO] [CharacterManager] Getting character names.
+[2025-08-07 17:35:35] [INFO] [CharacterManager] Character names retrieved.
+[2025-08-07 17:35:39] [INFO] [CharacterManager] Getting LLM for ノクス.
+[2025-08-07 17:35:39] [INFO] [LLMInstanceManager] Getting LLM instance for ノクス.
+[2025-08-07 17:35:39] [INFO] [LLMInstanceManager] Creating new LLM instance for ノクス.
+[2025-08-07 17:35:39] [INFO] [LLMFactory] Creating LLM with provider: ollama, model: deepseek-r1:1.5b
+[2025-08-07 17:35:39] [INFO] [LLMFactory] Creating Ollama LLM with model: deepseek-r1:1.5b, base_url: http://192.168.1.33:11434
+[2025-08-07 17:35:39] [INFO] [LLMFactory] Ollama LLM created with model: deepseek-r1:1.5b
+[2025-08-07 17:35:39] [INFO] [LLMInstanceManager] LLM instance created and stored for ノクス.
+[2025-08-07 17:35:39] [INFO] [LLMInstanceManager] LLM instance retrieved for ノクス.
+[2025-08-07 17:35:39] [INFO] [CharacterManager] LLM retrieved for ノクス.
+[2025-08-07 17:35:39] [INFO] [CharacterManager] Getting persona prompt for ノクス.
+[2025-08-07 17:35:39] [INFO] [PersonaManager] Getting persona prompt for ノクス.
+[2025-08-07 17:35:39] [WARNING] [PersonaManager] No persona prompt found for ノクス.
+[2025-08-07 17:35:39] [INFO] [CharacterManager] Persona prompt retrieved for ノクス.
+[2025-08-07 17:35:39] [INFO] [CharacterManager] Getting character names.
+[2025-08-07 17:35:39] [INFO] [CharacterManager] Character names retrieved.
+[2025-08-07 17:35:44] [INFO] [CharacterManager] Getting character names.
+[2025-08-07 17:35:44] [INFO] [CharacterManager] Character names retrieved.
