@@ -1,0 +1,29 @@
+# ===============================================
+# ユーザープロファイル
+# この情報は会話時のシステムプロンプトに組み込まれます
+# ===============================================
+
+profile:
+  name: null
+  birth_date: "1972-08-11"
+  gender: "男性"
+  personality:
+    animal_fortune: "イエローのこじか"
+    mbti: "ENFP（運動家）"
+  career:
+    since: 1997
+    role: "組み込み系エンジニア"
+  family:
+    married_year: 2000
+    child:
+      - relation: "娘"
+        birth_year: 2008
+        notes:
+          - "中学受験に付き添い"
+  social_watch:
+    - "https://x.com/ren_ai_coach"
+    - "https://note.com/ren_ai_coach"
+  interaction_preferences:
+    user_phrase_implied: "よろしくお願いします"
+    assistant_phrase_expected: "ありがとうございます"
+    writing_style: "文章として成立するか、短く分かりやすいかを常に意識"

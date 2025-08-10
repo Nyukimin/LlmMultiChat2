@@ -7,6 +7,7 @@ from llm_factory import LLMFactory
 from llm_instance_manager import LLMInstanceManager
 from persona_manager import PersonaManager
 from log_manager import write_operation_log
+import yaml
 
 class CharacterManager:
     def __init__(self, log_filename: str, operation_log_filename: str, config_path: str = None, persona_path: str = None):
@@ -25,6 +26,17 @@ class CharacterManager:
         self.llm_factory = LLMFactory(self.log_filename, self.operation_log_filename)
         self.llm_manager = LLMInstanceManager(self.log_filename, self.operation_log_filename)
         self.persona_manager = PersonaManager(self.log_filename, self.operation_log_filename, resolved_persona_path)
+
+        # ユーザープロファイル読み込み（任意）
+        self.user_profile = {}
+        user_profile_path = os.path.join(base_dir, 'user_profile.yaml')
+        try:
+            if os.path.exists(user_profile_path):
+                with open(user_profile_path, 'r', encoding='utf-8') as f:
+                    data = yaml.safe_load(f) or {}
+                    self.user_profile = data.get('profile') or {}
+        except Exception:
+            self.user_profile = {}
         
         write_operation_log(self.operation_log_filename, "INFO", "CharacterManager", "CharacterManager initialized.")
 
@@ -50,8 +62,30 @@ class CharacterManager:
 
     def get_persona_prompt(self, character_name: str) -> str:
         write_operation_log(self.operation_log_filename, "INFO", "CharacterManager", f"Getting persona prompt for {character_name}.")
-        prompt = self.persona_manager.get_persona_prompt(character_name)
-        return prompt
+        persona = self.persona_manager.get_persona_prompt(character_name)
+        # ユーザープロファイルを末尾に付加（軽量）
+        if self.user_profile:
+            up = self.user_profile
+            extras = []
+            if up.get('birth_date') or up.get('gender'):
+                extras.append(f"ユーザー: {up.get('birth_date','?')} 生まれ / {up.get('gender','?')}")
+            if up.get('personality'):
+                pers = up['personality']
+                af = pers.get('animal_fortune')
+                mbti = pers.get('mbti')
+                extras.append(f"性格参考: 動物占い={af or '-'}, MBTI={mbti or '-'}")
+            if up.get('career'):
+                extras.append(f"職歴: {up['career'].get('since','?')}年〜 {up['career'].get('role','')}".strip())
+            if up.get('family'):
+                extras.append("家族: 結婚(2000)、娘(2008) 中学受験に付き添い")
+            if up.get('interaction_preferences'):
+                ip = up['interaction_preferences']
+                extras.append("会話方針: ユーザー発言には『よろしくお願いします』が含意。あなたの返答は『ありがとうございます』の姿勢で。短く分かりやすい文章を心がける。")
+            if up.get('social_watch'):
+                extras.append("参考リンクを随時ウォッチ: " + ", ".join(up['social_watch']))
+            user_block = "\n\n## ユーザープロファイル（要約）\n- " + "\n- ".join(extras)
+            return (persona or "") + user_block
+        return persona
 
     def list_characters(self) -> List[Dict[str, Any]]:
         return self.character_configs
