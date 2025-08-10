@@ -8,6 +8,7 @@
 - 生成パラメータ（温度など）をキャラ別に設定可能化
 - HOWTOドキュメント追加
 - ルール/ペルソナの強化
+- メディアDB（SQLite+FTS）を追加（カテゴリ横断の人/作品/クレジット、統合作品対応）
 
 ## 主な変更
 - コア
@@ -27,6 +28,9 @@
   - `docs/*LangGraph*.md`: 設計/移行/マッピング/PoC/クイックスタートを最新化
   - `docs/HOWTO_Add_LLM.md`, `docs/HOWTO_Extend_Rules.md` 追加
   - `README.md`, `docs/SystemOverview.md` をLangGraph+HTTP方針に更新
+- メディアDB（SQLite+FTS）
+  - 追加: `KB/README.md`, `KB/USAGE.md`, `KB/schema.sql`, `KB/init_db.py`, `KB/query.py`, `KB/query_examples.sql`, `KB/example_data.sql`
+  - 拡張: `unified_work`/`unified_work_member` を導入。カテゴリ横断の同一題材を束ねて連想可能
 
 ## 影響/互換性
 - WebSocketスキーマは不変。UI変更なし
@@ -36,6 +40,7 @@
 ## 運用メモ
 - OpenAI利用時は `.env` に `OPENAI_API_KEY` を設定
 - Ollamaは `base_url` を設定（疎通/モデル存在確認）
+- メディアDBはローカルのSQLiteファイル（`KB/media.db`）として完結
 
 ## 今後
 - `LLM/graph/` のGraph実装（State/Nodes）追加
