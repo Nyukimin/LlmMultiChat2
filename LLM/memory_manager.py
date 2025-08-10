@@ -4,7 +4,7 @@ import uuid
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
-from langchain_core.messages import SystemMessage
+from typing import Any
 
 from log_manager import read_log, write_operation_log
 
@@ -78,8 +78,7 @@ async def persist_thread_from_log(
         keywords: List[str] = []
 
         try:
-            response = await llm.ainvoke([SystemMessage(content=system_prompt)])
-            content = getattr(response, "content", str(response))
+            content = await llm.ainvoke(system_prompt, "")
             # JSON抽出（安全のため前後空白除去）
             content = content.strip()
             data = json.loads(content)
@@ -108,16 +107,7 @@ async def persist_thread_from_log(
             "full_log": full_log_text,
         }
 
-        # 任意: OpenAI Embeddings（APIキーがある場合のみ）
-        try:
-            from os import getenv
-            if getenv("OPENAI_API_KEY"):
-                from langchain_openai import OpenAIEmbeddings
-                emb = OpenAIEmbeddings()
-                vec = emb.embed_query(summary or full_log_text[:1000])
-                record["embedding"] = vec
-        except Exception as e:
-            write_operation_log(operation_log_filename, "WARNING", "MemoryManager", f"Embedding skipped: {e}")
+        # Embedding は未実装（LangChain依存を排除）。必要に応じて将来 `text-embedding` API へ置換
 
         # JSONLへ追記
         with open(jsonl_path, "a", encoding="utf-8") as f:

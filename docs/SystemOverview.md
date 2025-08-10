@@ -7,7 +7,7 @@
 ## 技術スタック
 - サーバ: FastAPI / Uvicorn
 - クライアント: 素の HTML/CSS/JavaScript（`html/`）
-- LLM接続: LangChain（`langchain`, `langchain-community`, `langchain-openai`）
+- LLM接続: HTTPクライアント（Ollama REST / OpenAI API）、オーケストレーションは LangGraph
 - モデルプロバイダ: 現実装では `ollama` / `openai` を `LLMFactory` がサポート
 - 通信: WebSocket（JSON メッセージ: `config` / `message` / `status`）
 - 設定: YAML（`LLM/config.yaml`, `LLM/personas.yaml`, `LLM/global_rules.yaml`）

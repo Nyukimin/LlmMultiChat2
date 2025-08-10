@@ -1,16 +1,12 @@
-# LangChain Core and ecosystem (latest stable compatible)
-langchain>=0.3.0
-langchain-community>=0.3.0
-langchain-openai>=0.2.0
-langchain-google-genai>=2.0.0
-langchain-anthropic>=0.1.0
-langchain-ollama>=0.1.0
+# LangGraph (state orchestration)
 langgraph>=0.1.70
 
 # Utility packages
 python-dotenv
 pyyaml
 pytz
+httpx>=0.27.0
+openai>=1.40.0
 
 # Web Server packages
 fastapi>=0.115.0

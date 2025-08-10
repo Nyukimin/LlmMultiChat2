@@ -4,7 +4,6 @@ import traceback
 import uuid
 from datetime import datetime
 from fastapi import WebSocket
-from langchain_core.messages import SystemMessage, HumanMessage, AIMessage
 import yaml
 import os
 from typing import Dict, List, Dict as TDict
@@ -136,7 +135,8 @@ async def process_character_turn(
         conversation_log=conversation_log,
     )
     
-    messages = [SystemMessage(content=final_prompt), HumanMessage(content=last_message)]
+    system_prompt = final_prompt
+    user_message = last_message
 
     # 呼び出しメタ情報（モデル等）を特定
     char_cfg = next((c for c in manager.list_characters() if c.get("display_name", c.get("name")) == character_name or c.get("name") == character_name), None)
@@ -157,11 +157,8 @@ async def process_character_turn(
     response_text = ""
     try:
         # 応答生成に上限時間を設け、ハング/長考を防ぐ
-        response = await asyncio.wait_for(llm.ainvoke(messages), timeout=60.0)
-        if isinstance(response, AIMessage):
-            response_text = response.content
-        else:
-            response_text = str(response)
+        response_text = await asyncio.wait_for(llm.ainvoke(system_prompt, user_message), timeout=60.0)
+        response_text = str(response_text or "")
 
         # [Next: ...]タグを抽出する前に、<think>タグとその内容を削除
         response_text = re.sub(r'<think>.*?</think>', '', response_text, flags=re.DOTALL).strip()

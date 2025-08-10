@@ -5,7 +5,7 @@
 複数のLLMキャラクター（ルミナ/クラリス/ノクス）が、ユーザーの入力後に自律的に会話を交わすローカル実行基盤です。設定（YAML）を編集するだけで、使用モデルや接続先、会話ルールを切り替えられます。
 
 ## 概要 / 特徴
-- **LangChain + FastAPI + WebSocket** で軽量構成（LangGraph 移行計画あり。`docs/_index_LangGraph.md` 参照）
+- **LangGraph + FastAPI + WebSocket** で軽量構成（`docs/_index_LangGraph.md` 参照）
 - **マルチLLM**（Ollama, OpenAI ほか）をキャラ単位で選択
 - **次話者指名**: 応答末尾の `[Next: INTERNAL_ID]`（または `{"next":"INTERNAL_ID"}`）を解析し、話者を決定
 - **ログ**: 会話ログと操作ログ。LLM呼び出しは相関ID付き REQ/RESP/TIMEOUT/ERROR を記録
@@ -41,7 +41,7 @@
 ## ⚙️ セットアップ
 1) 前提: Python 3.9+、必要に応じて [Ollama](https://ollama.com/) が稼働
 
-2) 依存インストール（主要レンジは `LLM/requirements.txt` を参照: `langchain>=0.3.0`, `langchain-ollama>=0.1.0`, `langgraph>=0.1.70` など）
+2) 依存インストール（主要レンジは `LLM/requirements.txt` を参照: `langgraph>=0.1.70`, `httpx`, `openai` など）
 ```
 cd LLM
 pip install -r requirements.txt
@@ -114,7 +114,7 @@ uvicorn main:app --reload --host 0.0.0.0 --port 8000
 ## よくある質問
 - 応答が長すぎる/未完に見える → サーバ側で前置き削除+短縮を適用。必要なら `conversation_loop.py` の閾値を調整
 - 自動会話が止まる → `conversation.auto_loops` を確認。20 など大きくすると巡回継続します
-- ChatOllama の警告 → 実行に支障なし。`ChatOllama` は `langchain-ollama` を優先使用し、未導入環境では `langchain-community` 実装へ自動フォールバックします
+- OpenAI/Ollama の疎通 → `OPENAI_API_KEY` や `base_url` を確認。Ollamaは `/api/*` の生RESTを利用します
 
 ## LangGraph 関連資料
 - 設計/移行/PoC/クイックスタートは `docs/_index_LangGraph.md` を参照
