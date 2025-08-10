@@ -66,8 +66,22 @@ def remove_preamble(text: str) -> str:
     ]
     for pat in patterns:
         s = _re.sub(pat, "", s)
+    # 先頭に残った読点/句読点/記号を除去
+    s = s.lstrip(" 、。!！?？・:;　\t")
     s = s.strip()
     return s or original
+
+
+def ensure_sentence_complete(text: str) -> str:
+    """末尾が句点/終止記号で終わるように補完する。"""
+    if not text:
+        return text
+    s = str(text).strip()
+    if not s:
+        return s
+    if s[-1] in ("。", "！", "!", "？", "?"):
+        return s
+    return s + "。"
 
 
 def _load_auto_loops_from_config(default_value: int) -> int:
@@ -165,6 +179,7 @@ async def process_character_turn(
         # 表示前に前置きを除去→短縮（未完了感の軽減と要点提示）
         response_text = remove_preamble(response_text)
         response_text = shorten_text(response_text, max_sentences=2, max_chars=160)
+        response_text = ensure_sentence_complete(response_text)
         write_log(log_filename, character_name, response_text)
         preview_text = (response_text or "")[:120].replace("\n", " ")
         write_operation_log(
