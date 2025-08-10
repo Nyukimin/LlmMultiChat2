@@ -11,8 +11,7 @@
 - [ ] `LLM/graph/state.py`（State/初期化）
 - [ ] `LLM/graph/nodes.py`（prepare/call_llm/postprocess/extract_next/choose_next/send/status/persist）
 - [ ] `LLM/graph/app.py`（StateGraph 構築・run）
-- [ ] `LLM/config.yaml` に `conversation.engine` 追加（承認後）
-- [ ] `websocket_manager.py` で分岐（承認後）
+- （切替フラグは不要。Graph 実装は逐次ループ互換として順次適用）
 
 ## 4. 受け入れ条件
 - `engine=langgraph` で 3キャラが `auto_loops` 回内で会話し、[Next]/JSON 指名・フォールバックが期待通り動作
@@ -30,6 +29,6 @@
 - M3: メモリ統合（+2日）
 
 ## 7. リスク/対策
-- 依存競合: 互換レンジ固定（`langchain>=0.3.0`/`langgraph>=0.1.70`）
+- 依存競合: 互換レンジ固定（`langgraph>=0.1.70`）
 - 仕様差: 既存関数をノードで再利用し差分を最小化
 - 回帰: ノード単体/結合テストを充実

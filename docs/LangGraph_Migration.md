@@ -2,16 +2,15 @@
 
 ## 0. 現状整理（2025-08 時点）
 - 実装実態
-  - 会話制御は `LLM/conversation_loop.py`（LangChain メッセージ）
-  - LLM生成は `LLM/llm_factory.py`（`langchain-ollama` 優先、`langchain-community` フォールバック／`langchain-openai`）
+  - 会話制御は `LLM/conversation_loop.py`（LangChain 依存なし）
+  - LLM生成は `LLM/llm_factory.py`（Ollama REST / OpenAI API）
   - 次話者決定は `LLM/next_speaker_resolver.py`（タグ/近似/RR/Random）
   - メモリ要約は `LLM/memory_manager.py`（JSONL簡易永続）
 - 依存（最新レンジ導入済み）
-  - `langchain>=0.3.0`, `langchain-community>=0.3.0`, `langchain-openai>=0.2.0`, `langchain-ollama>=0.1.0`
   - `langgraph>=0.1.70`
   - `fastapi>=0.115.0`, `uvicorn>=0.30.0`, `websockets>=12.0`
 - 互換ポリシー
-  - `ChatOllama` は `langchain-ollama` を優先。未導入環境では `langchain-community` に自動フォールバック
+  - LangChain 非依存。HTTPクライアントのみ
 
 ## 1. 目的
 - LangChain 中心の逐次ロジックを LangGraph の StateGraph に段階移行し、状態遷移を明示化
@@ -35,7 +34,7 @@
 
 ## 5. タスクリスト
 - 設定/切替
-  - [ ] `LLM/config.yaml` に `conversation.engine: langchain|langgraph`（既定: langchain）
+  - [ ] （不要）
   - [ ] `websocket_manager` で分岐実行
 - 実装
   - [ ] `LLM/graph/state.py`（State型/初期化）
@@ -45,7 +44,7 @@
   - [ ] 単体（ノード関数）/結合（3キャラ・分岐・タイムアウト）
   - [ ] 負荷（連続入力・空応答）
 - 運用
-  - [ ] ロールバック手順（engine=langchain）
+  - [ ] ロールバック手順（逐次ループへの一時復帰）
 
 ## 6. 影響範囲
 - コード: `conversation_loop.py`, `memory_manager.py`, `character_manager.py`, `websocket_manager.py`
@@ -57,7 +56,7 @@
 - Graph ファイル群の新設（`LLM/graph/`）
 
 ## 8. ロールバック
-- `conversation.engine = langchain` で即時復帰
+- 逐次ループへ戻すことで即時復帰
 
 ## 9. マイルストーン（目安）
 - M1: PoC（1〜2日）

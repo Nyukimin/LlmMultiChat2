@@ -7,7 +7,7 @@
 - `LLM/next_speaker_resolver.py`
   - 再利用: `extract_next` ノードで呼び出し
 - `LLM/llm_factory.py` / `LLM/llm_instance_manager.py`
-  - 再利用: `call_llm` ノードで LLM を取得（`langchain-ollama` 優先）
+  - 再利用: `call_llm` ノードで LLM を取得（Ollama REST / OpenAI API）
 - `LLM/character_manager.py` / `LLM/persona_manager.py`
   - 再利用: `prepare_context` ノード
 - `LLM/status_manager.py`
@@ -19,8 +19,7 @@
 
 ## 2. 設定
 - `LLM/config.yaml`
-  - 追加: `conversation.engine`（`langchain`|`langgraph`）
-  - 既存: `conversation.auto_loops` → `max_turns`
+  - `conversation.auto_loops` → `max_turns`
 
 ## 3. データフロー（要約）
 1) prepare_context
@@ -33,7 +32,7 @@
 8) persist_memory（終了時）
 
 ## 4. ロールバック
-- `conversation.engine=langchain` で即復帰
+（ロールバックは不要。Graph 実装は既存ループ互換のため切替なしで動作）
 
 ## 5. 試験観点
 - 正常: 3キャラが指名に従い遷移

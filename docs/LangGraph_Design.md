@@ -3,12 +3,11 @@
 ## 1. 方針
 - 既存の逐次ロジックを LangGraph StateGraph へ移管し、状態遷移・例外系・フォールバックを明示化
 - WebSocket スキーマ/UI は互換維持（変更禁止）
-- LLM 接続は既存 `LLMFactory` を再利用（`langchain-ollama`/`langchain-openai`）
+- LLM 接続は既存 `LLMFactory` を再利用（Ollama REST / OpenAI API）
 
 ## 2. 依存/要件
 - Python: 3.9+
 - 主要依存（導入済み）
-  - `langchain>=0.3.0`, `langchain-community>=0.3.0`, `langchain-openai>=0.2.0`, `langchain-ollama>=0.1.0`
   - `langgraph>=0.1.70`
   - `fastapi>=0.115.0`, `uvicorn>=0.30.0`, `websockets>=12.0`
 
@@ -66,9 +65,8 @@ State = {
 
 ## 8. 設定（承認後反映）
 - `LLM/config.yaml`
-  - `conversation.engine: langchain|langgraph`（既定: langchain）
   - `conversation.auto_loops`: 既存
 
 ## 9. 互換性
 - WebSocket スキーマ・UI・短縮/挨拶除去・[Next]仕様は既存通り
-- `ChatOllama` は `langchain-ollama` 優先で後方互換を確保
+  
