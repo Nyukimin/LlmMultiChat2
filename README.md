@@ -119,5 +119,9 @@ uvicorn main:app --reload --host 0.0.0.0 --port 8000
 ## LangGraph 関連資料
 - 設計/移行/PoC/クイックスタートは `docs/_index_LangGraph.md` を参照
 
+## HOWTO（よく使う操作）
+- 新しいLLM（キャラクター）を追加する: `docs/HOWTO_Add_LLM.md`
+- ルール（全体/キャラ別）を増やす・強化する: `docs/HOWTO_Extend_Rules.md`
+
 ## ライセンス
 MIT
