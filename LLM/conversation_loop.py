@@ -279,7 +279,7 @@ async def conversation_loop(websocket: WebSocket, manager: CharacterManager, log
             await update_all_statuses(websocket, manager.get_character_names(), "IDLE", log_filename, operation_log_filename)
             
             # 周回内の話者管理
-            character_names = manager.get_character_names()
+            character_names = manager.get_character_names(include_hidden=False)
             current_speaker = character_names[0]
             last_message = user_query
             spoken = set()

@@ -35,6 +35,19 @@ characters:
       repeat_penalty: 1.05
       num_predict: 220
 
+  # 収集専用（隠しキャラ）
+  - name: "SEARCHER"
+    display_name: "サーチャー"
+    provider: "ollama"
+    model: "7shi/llm-jp-3-ezo-humanities:3.7b-instruct-q8_0"
+    base_url: "http://192.168.1.33:11434"
+    hidden: true
+    generation:
+      temperature: 0.0
+      top_p: 0.9
+      repeat_penalty: 1.1
+      num_predict: 180
+
 logs:
   conversation_dir: "LLM/logs"   # 任意に変更可（例: "logs/conversations"）
   operation_dir: "logs"          # 未指定なら既定で "logs"
@@ -44,4 +57,10 @@ conversation:
   # 例: 2 → ルミナ→クラリス で終了（人数に満たない場合は人数優先で1巡）
   # 0 → 自動会話を行わない
   auto_loops: 20
+
+# ナレッジベース連携設定（動作確認向けの簡易モード）
+kb:
+  ingest_mode: false          # trueで応答中のkbjsonブロックを自動取り込み
+  db_path: "KB/media.db"      # SQLite DB パス
+  category_hint: "映画"        # 収集対象のカテゴリヒント（任意）
 

@@ -2,12 +2,14 @@ import os
 import json
 import re
 import asyncio
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Callable
 
 from character_manager import CharacterManager
 from llm_factory import LLMFactory
 from llm_instance_manager import LLMInstanceManager
 from log_manager import write_operation_log
+from readiness_checker import ensure_ollama_model_ready_sync
+from web_search import search_text
 
 # KB ingestion
 import sys
@@ -27,27 +29,42 @@ def ensure_dirs():
 
 
 def build_extractor_prompt(domain: str) -> str:
-    return (
-        "あなたは事実収集アシスタントです。以下の対象ドメインに限定して、確度の高い事実のみを"
-        "JSONで抽出してください。推測は避け、未確定情報はnoteに記載してください。\n\n"
-        f"対象ドメイン: {domain}\n\n"
-        "必ず次のスキーマのJSONだけを出力します（他の文字は出力しない）。\n"
-        "{\n"
-        "  \"persons\": [ { \"name\": str, \"aliases\": [str] } ],\n"
-        "  \"works\": [ { \"title\": str, \"category\": str, \"year\": int|null, \"subtype\": str|null, \"summary\": str|null } ],\n"
-        "  \"credits\": [ { \"work\": str, \"person\": str, \"role\": str, \"character\": str|null } ],\n"
-        "  \"external_ids\": [ { \"entity\": \"work|person\", \"name\": str, \"source\": str, \"value\": str, \"url\": str|null } ],\n"
-        "  \"unified\": [ { \"name\": str, \"work\": str, \"relation\": str } ],\n"
-        "  \"note\": str|null\n"
-        "}\n\n"
-        "role の例: actor/voice/director/author/screenplay/composer/lyricist 等。"
-    )
+    template = """あなたは事実収集アシスタントです。以下の対象ドメインに限定し、確度の高い事実のみを抽出します。
+推測は避け、未確定情報は note に記載してください。
+対象ドメイン: {DOMAIN}
 
+出力規則:
+- 出力は JSON オブジェクト 1個のみ。前置き・後置き・Markdown・説明は禁止。
+- もし情報が見つからない場合でも、空配列を持つJSONを返す（例: persons:[], works:[] ...）。
+- JSONは次のマーカーに必ず挟むこと。
+  <<<JSON_START>>>
+  {{ ... }}
+  <<<JSON_END>>>
+
+スキーマ:
+{{
+  "persons": [ {{ "name": "", "aliases": [""] }} ],
+  "works": [ {{ "title": "", "category": "映画", "year": 2024, "subtype": null, "summary": null }} ],
+  "credits": [ {{ "work": "", "person": "", "role": "actor", "character": null }} ],
+  "external_ids": [ {{ "entity": "work", "name": "", "source": "wikipedia", "value": "", "url": null }} ],
+  "unified": [ {{ "name": "", "work": "", "relation": "adaptation" }} ],
+  "note": null
+}}
+"""
 
 def extract_json(text: str) -> Optional[Dict[str, Any]]:
     if not text:
         return None
     s = text.strip()
+    # まずはマーカー優先
+    start_tag = "<<<JSON_START>>>"
+    end_tag = "<<<JSON_END>>>"
+    if start_tag in s and end_tag in s:
+        try:
+            frag = s.split(start_tag, 1)[1].split(end_tag, 1)[0]
+            return json.loads(frag)
+        except Exception:
+            pass
     # 最初の { から最後の } までを抜く簡易抽出
     m1 = s.find("{")
     m2 = s.rfind("}")
@@ -96,36 +113,110 @@ def merge_payloads(payloads: List[Dict[str, Any]]) -> Dict[str, Any]:
     return result
 
 
-async def run_ingest_mode(topic: str, domain: str, rounds: int, db_path: str) -> Dict[str, Any]:
+async def run_ingest_mode(
+    topic: str,
+    domain: str,
+    rounds: int,
+    db_path: str,
+    expand: bool = True,
+    strict: bool = False,
+    log_callback: Optional[Callable[[str], None]] = None,
+) -> Dict[str, Any]:
     ensure_dirs()
     log_filename = os.path.join(BASE_DIR, "logs", "ingest_conversation.log")
     operation_log_filename = os.path.join(BASE_DIR, "..", "logs", "operation_ingest.log")
 
     manager = CharacterManager(log_filename, operation_log_filename)
 
+    # 事前ウォームアップ（Ollamaの場合）
+    try:
+        for c in manager.list_characters():
+            if str(c.get("provider", "")).lower() == "ollama":
+                base_url = c.get("base_url", "http://localhost:11434")
+                model = c.get("model")
+                ensure_ollama_model_ready_sync(base_url, model, operation_log_filename)
+    except Exception:
+        pass
+
     extractor = build_extractor_prompt(domain)
+    def _log(msg: str) -> None:
+        try:
+            if log_callback:
+                log_callback(msg)
+        except Exception:
+            pass
     collected: List[Dict[str, Any]] = []
 
-    characters = manager.get_character_names()
+    # 検索専用キャラ（隠し）を優先使用。存在しなければ可視キャラでフォールバック
+    all_names = manager.get_character_names(include_hidden=True)
+    characters = [n for n in all_names if n == "サーチャー"] or manager.get_character_names(include_hidden=False)
+    seeds: List[str] = []
+    base_topic = topic
+    _log(f"Start ingest: topic='{topic}', domain='{domain}', rounds={rounds}, strict={strict}")
     for r in range(max(1, rounds)):
+        _log(f"Round {r+1}/{max(1, rounds)}")
         for name in characters:
             persona = manager.get_persona_prompt(name)
-            system_prompt = f"{persona}\n\n## 収集モード\n{extractor}"
+            if strict:
+                system_prompt = f"## 収集モード(STRICT)\n{extractor}\n\n必ず有効なJSONのみを出力してください。前置き・補足・マークダウンは禁止です。"
+            else:
+                system_prompt = f"{persona}\n\n## 収集モード\n{extractor}"
             llm = manager.get_llm(name)
             if llm is None:
                 continue
             try:
-                resp = await asyncio.wait_for(llm.ainvoke(system_prompt, f"収集対象: {topic}"), timeout=60.0)
+                t = base_topic
+                if expand and seeds:
+                    t = base_topic + " " + " ".join(list(dict.fromkeys(seeds))[:5])
+                # DuckDuckGo 検索を先に実施し、上位結果をヒントとして同梱
+                try:
+                    hits = search_text(f"{t} site:.jp", region="jp-jp", max_results=8, safesearch="moderate")
+                    hints = "\n".join([f"- {h['title']} :: {h['url']} :: {h['snippet']}" for h in hits])
+                except Exception as _e:
+                    hints = ""
+                hint_block = f"\n\n## 参考ヒント(検索結果)\n{hints}\n" if hints else ""
+                resp = await asyncio.wait_for(llm.ainvoke(system_prompt, f"収集対象: {t}"), timeout=60.0)
+                # 検索ヒント併用で再試行（STRICT優先）
                 data = extract_json(resp)
+                if not data and hints:
+                    resp_h = await asyncio.wait_for(llm.ainvoke(system_prompt, f"収集対象: {t}{hint_block}"), timeout=60.0)
+                    data = extract_json(resp_h)
                 if isinstance(data, dict):
                     collected.append(data)
                     write_operation_log(operation_log_filename, "INFO", "IngestMode", f"Collected payload from {name} (round {r+1}).")
+                    _log(f"Collected JSON from {name}")
+                    if expand:
+                        # 次ラウンド用シード抽出
+                        for p in (data.get("persons") or []):
+                            n = (p.get("name") or "").strip()
+                            if n:
+                                seeds.append(n)
+                        for w in (data.get("works") or []):
+                            n = (w.get("title") or "").strip()
+                            if n:
+                                seeds.append(n)
                 else:
-                    write_operation_log(operation_log_filename, "WARNING", "IngestMode", f"Non-JSON from {name} (round {r+1}).")
+                    # リトライ（STRICT再試行）
+                    if not strict:
+                        sp = f"## 収集モード(STRICT-RETRY)\n{extractor}\n\nJSONのみを返してください。先頭から {{ と }} までの有効JSONのみ。"
+                        resp2 = await asyncio.wait_for(llm.ainvoke(sp, f"収集対象: {t}"), timeout=60.0)
+                        data2 = extract_json(resp2)
+                        if isinstance(data2, dict):
+                            collected.append(data2)
+                            write_operation_log(operation_log_filename, "INFO", "IngestMode", f"Collected payload (retry) from {name} (round {r+1}).")
+                            _log(f"Collected JSON (retry) from {name}")
+                        else:
+                            write_operation_log(operation_log_filename, "WARNING", "IngestMode", f"Non-JSON from {name} (round {r+1}).")
+                            _log(f"Non-JSON from {name}")
+                    else:
+                        write_operation_log(operation_log_filename, "WARNING", "IngestMode", f"Non-JSON from {name} (round {r+1}).")
+                        _log(f"Non-JSON from {name}")
             except asyncio.TimeoutError:
                 write_operation_log(operation_log_filename, "WARNING", "IngestMode", f"Timeout from {name} (round {r+1}).")
+                _log(f"Timeout from {name}")
             except Exception as e:
                 write_operation_log(operation_log_filename, "ERROR", "IngestMode", f"Error from {name} (round {r+1}): {e}")
+                _log(f"Error from {name}: {e}")
 
     merged = merge_payloads(collected)
 
@@ -135,7 +226,9 @@ async def run_ingest_mode(topic: str, domain: str, rounds: int, db_path: str) ->
         try:
             ingest_payload(os.path.abspath(db_path), merged)
             write_operation_log(operation_log_filename, "INFO", "IngestMode", f"Registered to DB: {db_path}")
+            _log("Registered to DB")
         except Exception as e:
             write_operation_log(operation_log_filename, "ERROR", "IngestMode", f"Failed to register DB: {e}")
+            _log(f"Failed to register DB: {e}")
 
     return merged

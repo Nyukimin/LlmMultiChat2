@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>KB Ingest UI</title>
+  <link rel="stylesheet" href="/static/kb/ingest.css" />
+  <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&display=swap" rel="stylesheet">
+  <script defer src="/static/kb/ingest.js"></script>
+</head>
+<body>
+  <div class="container">
+    <h1>KB Ingest UI</h1>
+    <p class="hint">/api/ingest を使って LLM から事実を抽出し、KB(media.db) に登録します。</p>
+
+    <section class="controls">
+      <div class="field">
+        <label>トピック</label>
+        <input id="topic" type="text" placeholder="例: 吉沢亮 国宝" />
+      </div>
+      <div class="row">
+        <div class="field">
+          <label>ドメイン</label>
+          <select id="domain">
+            <option>映画</option>
+            <option>音楽</option>
+            <option>小説</option>
+            <option>漫画</option>
+            <option>アニメ</option>
+            <option>ボードゲーム</option>
+            <option>演劇</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>巡回数</label>
+          <input id="rounds" type="number" min="1" max="10" value="2" />
+        </div>
+        <div class="field checkbox">
+          <label><input id="strict" type="checkbox" /> strict(JSON強制)</label>
+        </div>
+      </div>
+      <div class="actions">
+        <button id="run">収集して登録</button>
+        <button id="clear">ログをクリア</button>
+      </div>
+    </section>
+
+    <section class="logs">
+      <h2>実行ログ</h2>
+      <div id="log" class="log"></div>
+    </section>
+
+    <section class="result">
+      <h2>結果サマリ</h2>
+      <pre id="summary" class="summary"></pre>
+    </section>
+
+    <section class="links">
+      <a href="/static/" target="_blank">チャットUI</a>
+      <a href="/static/KB/USAGE.md" target="_blank">KB/USAGE.md (Raw 配信環境では閲覧不可の場合あり)</a>
+    </section>
+  </div>
+</body>
+</html>

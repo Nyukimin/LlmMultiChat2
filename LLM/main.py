@@ -2,7 +2,7 @@ import asyncio
 import traceback
 import os
 import sys
-from fastapi import FastAPI, WebSocket
+from fastapi import FastAPI, WebSocket, Body
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import RedirectResponse
 import uvicorn
@@ -13,6 +13,8 @@ import websocket_manager as wm
 import log_manager as lm
 import yaml
 from readiness_checker import ensure_ollama_model_ready_sync
+from ingest_mode import run_ingest_mode  # type: ignore
+import json
 
 app = FastAPI()
 
@@ -21,6 +23,7 @@ app.mount("/static", StaticFiles(directory=os.path.join(os.path.dirname(os.path.
 operation_log_filename = ""
 conversation_log_dir = None
 operation_log_dir = None
+_last_ingest_result_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "logs", "last_ingest.json")
 
 @app.on_event("startup")
 async def startup_event():
@@ -92,6 +95,31 @@ async def shutdown_event():
 @app.get("/")
 async def root():
     return RedirectResponse(url="/static/")
+
+@app.post("/api/ingest")
+async def api_ingest(payload: dict = Body(...)):
+    """
+    JSON: {"topic": str, "domain": str, "rounds": int, "db": str, "strict": bool}
+    """
+    topic = str(payload.get("topic") or "").strip()
+    domain = str(payload.get("domain") or "映画").strip()
+    rounds = int(payload.get("rounds") or 1)
+    db = str(payload.get("db") or os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "KB", "media.db"))
+    strict = bool(payload.get("strict") or False)
+    lm.write_operation_log(operation_log_filename, "INFO", "API", f"Ingest requested: topic={topic}, domain={domain}, rounds={rounds}, strict={strict}")
+    # ログをフロントへ逐次返すための簡易バッファ
+    logs: list[str] = []
+    def _cb(m: str) -> None:
+        logs.append(m)
+
+    result = await run_ingest_mode(topic, domain, rounds, db, expand=True, strict=strict, log_callback=_cb)
+    try:
+        os.makedirs(os.path.dirname(_last_ingest_result_path), exist_ok=True)
+        with open(_last_ingest_result_path, "w", encoding="utf-8") as f:
+            json.dump(result, f, ensure_ascii=False, indent=2)
+    except Exception:
+        pass
+    return {"ok": True, "result": result, "logs": logs}
 
 @app.websocket("/ws")
 async def ws_endpoint(websocket: WebSocket):

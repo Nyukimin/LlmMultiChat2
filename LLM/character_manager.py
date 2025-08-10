@@ -90,5 +90,10 @@ class CharacterManager:
     def list_characters(self) -> List[Dict[str, Any]]:
         return self.character_configs
 
-    def get_character_names(self) -> List[str]:
-        return [char.get("display_name", char["name"]) for char in self.character_configs]
+    def get_character_names(self, include_hidden: bool = False) -> List[str]:
+        names: List[str] = []
+        for char in self.character_configs:
+            if not include_hidden and bool(char.get("hidden")):
+                continue
+            names.append(char.get("display_name", char["name"]))
+        return names

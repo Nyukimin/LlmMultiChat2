@@ -13,6 +13,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const chatForm = document.getElementById('chat-form');
     const userInput = document.getElementById('user-input');
     const sendButton = document.getElementById('send-button');
+    // Ingest UIは独立サブセットへ切り出し。メインUIでは扱わない
     // statusElementsは初期化時に動的に構築する
     let statusElements = {};
     let nameMapping = {};
@@ -104,6 +105,8 @@ document.addEventListener('DOMContentLoaded', () => {
         appLog('info', 'Send button clicked, triggering form submit.');
         handleFormSubmit(e);
     });
+
+    // Ingest機能は別UIへ移譲
     
     // --- 初期化処理 ---
     const init = () => {

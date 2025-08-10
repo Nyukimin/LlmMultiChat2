@@ -86,6 +86,43 @@ python KB/query.py person "吉沢亮"   # → 人→全出演作
 python KB/query.py work   "国宝"     # → 作品→全出演者
 ```
 
+## Ingest Mode（DB登録専用モード）
+LLM同士の協調で事実をJSON抽出し、`KB/media.db`へ自動登録します。
+
+### 実行
+```bash
+# 依存インストール（未実施なら）
+pip install -r LLM/requirements.txt
+
+# DB初期化
+python KB/init_db.py
+
+# 映画ドメインで2巡収集し登録（関連語をシードに拡張）
+python LLM/ingest_main.py "吉沢亮 国宝" --domain 映画 --rounds 2 --db KB/media.db
+```
+
+### JSONスキーマ（抜粋）
+```json
+{
+  "persons": [{ "name": "", "aliases": [""] }],
+  "works": [{ "title": "", "category": "映画", "year": 2024, "subtype": null, "summary": null }],
+  "credits": [{ "work": "", "person": "", "role": "actor", "character": null }],
+  "external_ids": [{ "entity": "work", "name": "", "source": "wikipedia", "value": "", "url": null }],
+  "unified": [{ "name": "国宝", "work": "国宝", "relation": "adaptation" }],
+  "note": null
+}
+```
+
+### ログと確認
+- 会話ログ: `LLM/logs/ingest_conversation.log`
+- 操作ログ: `logs/operation_ingest.log`
+- 登録確認:
+  ```bash
+  python KB/query.py work "国宝"
+  python KB/query.py person "吉沢亮"
+  sqlite3 KB/media.db ".read KB/query_unified.sql"
+  ```
+
 ## CSV投入（任意）
 `sqlite3` を使い、CSVを直接テーブルへ投入できます。
 ```bash
