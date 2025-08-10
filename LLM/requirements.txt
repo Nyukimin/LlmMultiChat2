@@ -1,11 +1,11 @@
-# LangChain Core and Community
-langchain
-langchain-community
-
-# Provider-specific packages
-langchain-openai
-langchain-google-genai
-langchain-anthropic
+# LangChain Core and ecosystem (latest stable compatible)
+langchain>=0.3.0
+langchain-community>=0.3.0
+langchain-openai>=0.2.0
+langchain-google-genai>=2.0.0
+langchain-anthropic>=0.1.0
+langchain-ollama>=0.1.0
+langgraph>=0.1.70
 
 # Utility packages
 python-dotenv
@@ -13,6 +13,6 @@ pyyaml
 pytz
 
 # Web Server packages
-fastapi
-uvicorn
-websockets
+fastapi>=0.115.0
+uvicorn>=0.30.0
+websockets>=12.0

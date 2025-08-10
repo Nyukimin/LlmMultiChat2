@@ -1,7 +1,16 @@
 from typing import Optional
 
-from langchain_community.chat_models import ChatOllama
-from langchain_openai import ChatOpenAI
+try:  # 新推奨: 専用パッケージ
+    from langchain_ollama import ChatOllama  # type: ignore
+except Exception:
+    try:  # 後方互換: 旧 community 実装
+        from langchain_community.chat_models import ChatOllama  # type: ignore
+    except Exception:
+        ChatOllama = None  # type: ignore
+try:
+    from langchain_openai import ChatOpenAI  # type: ignore
+except Exception:
+    ChatOpenAI = None  # type: ignore
 
 from log_manager import write_operation_log
 
@@ -16,6 +25,9 @@ class LLMFactory:
         try:
             if provider.lower() == "ollama":
                 # 出力を安定化（ハルシネーション抑制、冗長抑制）
+                if ChatOllama is None:
+                    write_operation_log(self.operation_log_filename, "ERROR", "LLMFactory", "ChatOllama is unavailable. Ensure 'langchain-ollama' or 'langchain-community' is installed.")
+                    return None
                 llm = ChatOllama(
                     model=model,
                     base_url=base_url,
@@ -26,6 +38,9 @@ class LLMFactory:
                 )
                 return llm
             elif provider.lower() == "openai":
+                if ChatOpenAI is None:
+                    write_operation_log(self.operation_log_filename, "ERROR", "LLMFactory", "ChatOpenAI is unavailable. Ensure 'langchain-openai' is installed.")
+                    return None
                 llm = ChatOpenAI(model=model, temperature=0)
                 return llm
             else:
