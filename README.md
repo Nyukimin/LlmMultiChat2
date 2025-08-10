@@ -116,7 +116,8 @@ uvicorn main:app --reload --host 0.0.0.0 --port 8000
 - 自動会話が止まる → `conversation.auto_loops` を確認。20 など大きくすると巡回継続します
 - OpenAI/Ollama の疎通 → `OPENAI_API_KEY` や `base_url` を確認。Ollamaは `/api/*` の生RESTを利用します
 
-## LangGraph 関連資料
+## 変更履歴 / LangGraph 関連資料
+- 変更履歴（要点のみ）: `docs/CHANGELOG.md`
 - 設計/移行/PoC/クイックスタートは `docs/_index_LangGraph.md` を参照
 
 ## HOWTO（よく使う操作）
