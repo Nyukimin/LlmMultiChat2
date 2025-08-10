@@ -89,6 +89,15 @@ python KB/query.py work   "国宝"     # → 作品→全出演者
 ## Ingest Mode（DB登録専用モード）
 LLM同士の協調で事実をJSON抽出し、`KB/media.db`へ自動登録します。
 
+現行実装は「検索先行」の収集フローです。
+- 各ラウンドの冒頭で DuckDuckGo 検索を実行し、上位ヒットの要約をLLMプロンプトへ同梱
+- LLMは厳格JSONのみ出力し、次に叩く検索語 `next_queries` を最大5件返す
+- 次ラウンドでは `next_queries` を優先して再検索（重複は除外）。fallback で persons/works の名称も使用
+ - 厳格JSON抽出は、マーカー優先（`<<<JSON_START>>>...<<<JSON_END>>>`）→コードフェンス抽出→最外括弧フォールバックの順で試行します
+ - 映画ドメインでは `natalie.mu`（映画ナタリー）、`movies.yahoo.co.jp`（Yahoo映画）、`eiga.com` の順で優先。
+   URLで拾えない場合は「映画.com」「映画com」キーワードで補完し、その後に `.jp` ドメインで補完します。
+   TikTok/YouTube/メルカリ等のノイズは除外します。
+
 ### 実行
 ```bash
 # 依存インストール（未実施なら）
@@ -109,7 +118,8 @@ python LLM/ingest_main.py "吉沢亮 国宝" --domain 映画 --rounds 2 --db KB/
   "credits": [{ "work": "", "person": "", "role": "actor", "character": null }],
   "external_ids": [{ "entity": "work", "name": "", "source": "wikipedia", "value": "", "url": null }],
   "unified": [{ "name": "国宝", "work": "国宝", "relation": "adaptation" }],
-  "note": null
+  "note": null,
+  "next_queries": ["吉沢亮 国宝 映画", "国宝 映画 キャスト"]
 }
 ```
 

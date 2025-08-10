@@ -8,7 +8,7 @@
 - `LLM/ingest_main.py`: CLI。トピック/ドメイン/巡回数/DBパスを指定して実行
 - `KB/ingest.py`: 受け取ったJSONを`schema.sql`に従って`media.db`へ投入
 
-## JSONスキーマ
+## JSONスキーマ（検索先行フロー）
 ```json
 {
   "persons": [{ "name": "", "aliases": [""] }],
@@ -16,7 +16,8 @@
   "credits": [{ "work": "", "person": "", "role": "actor", "character": null }],
   "external_ids": [{ "entity": "work", "name": "", "source": "wikipedia", "value": "", "url": null }],
   "unified": [{ "name": "国宝", "work": "国宝", "relation": "adaptation" }],
-  "note": null
+  "note": null,
+  "next_queries": ["吉沢亮 国宝 映画", "国宝 映画 キャスト"]
 }
 ```
 
@@ -31,6 +32,7 @@ python LLM/ingest_main.py "吉沢亮 国宝" --domain 映画 --rounds 2 --db KB/
 - 収集は「確度の高い事実」重視。推測や未確定は`note`へ、登録は避けてください。
 - 既存レコードはキーで同定し、重複登録を避けます（人物=名前、作品=タイトル+カテゴリ、クレジット=作品+人+役割+役名）。
 - タイムアウトは各呼び出し60s。
+ - 抽出器はDuckDuckGo検索の要約をヒントとして受け取り、厳格なJSONのみを返します（`<<<JSON_START>>> ... <<<JSON_END>>>` マーカー推奨、コードフェンスは避ける）。
 
 ## 検証
 - DB初期化: `python KB/init_db.py`
