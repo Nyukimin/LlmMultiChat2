@@ -1,0 +1,34 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+memo_dir="docs/change_memos"
+mkdir -p "$memo_dir"
+
+ts=$(date +"%Y%m%d-%H%M%S")
+
+# pre-push receives lines on stdin: <local_ref> <local_sha> <remote_ref> <remote_sha>
+# If remote_sha is all zeros, treat as empty base
+while read -r local_ref local_sha remote_ref remote_sha; do
+  [ -z "${local_ref:-}" ] && continue
+  branch_name=$(git rev-parse --abbrev-ref "$local_ref" 2>/dev/null || echo "$local_ref")
+  base_ref="$remote_sha"
+  if [ "$base_ref" = "0000000000000000000000000000000000000000" ] || [ -z "$base_ref" ]; then
+    # new branch push: use empty tree as base
+    base_ref=$(git hash-object -t tree /dev/null)
+  fi
+  out_file="$memo_dir/${ts}_push_${branch_name}.md"
+  {
+    echo "# Push Change Memo ($branch_name)"
+    echo
+    echo "## Commits to be pushed"
+    git log --oneline --decorate --no-merges "${base_ref}..${local_sha}" || true
+    echo
+    echo "## Files changed"
+    git diff --name-status "${base_ref}..${local_sha}" || true
+    echo
+    echo "## Diffstat"
+    git diff --stat "${base_ref}..${local_sha}" || true
+  } > "$out_file"
+  echo "[pre-push] Wrote change memo: $out_file"
+# shellcheck disable=SC2162
+done
