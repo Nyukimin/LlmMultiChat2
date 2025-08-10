@@ -10,6 +10,7 @@
 - ルール/ペルソナの強化
 - メディアDB（SQLite+FTS）を追加（カテゴリ横断の人/作品/クレジット、統合作品対応）
 - メディアDBのUSAGEに「入力キーと意味（テーブル別まとめ）」を追記
+- Ingest Mode（DB登録専用モード）を追加（JSON抽出→自動登録、CLI）
 
 ## 主な変更
 - コア
@@ -27,12 +28,11 @@
   - `LLM/personas.yaml`: LUMINAに関係性・名前由来を追記。CLARIS/NOXに各思考スタイルを追記
 - ドキュメント
   - `docs/*LangGraph*.md`: 設計/移行/マッピング/PoC/クイックスタートを最新化
-  - `docs/HOWTO_Add_LLM.md`, `docs/HOWTO_Extend_Rules.md` 追加
+  - `docs/HOWTO_Add_LLM.md`, `docs/HOWTO_Extend_Rules.md`, `docs/HOWTO_Ingest_Mode.md` 追加
   - `README.md`, `docs/SystemOverview.md` をLangGraph+HTTP方針に更新
 - メディアDB（SQLite+FTS）
-  - 追加: `KB/README.md`, `KB/USAGE.md`, `KB/schema.sql`, `KB/init_db.py`, `KB/query.py`, `KB/query_examples.sql`, `KB/example_data.sql`, `KB/query_unified.sql`, `KB/example_unified.sql`
+  - 追加: `KB/README.md`, `KB/USAGE.md`, `KB/schema.sql`, `KB/init_db.py`, `KB/query.py`, `KB/query_examples.sql`, `KB/example_data.sql`, `KB/query_unified.sql`, `KB/example_unified.sql`, `KB/ingest.py`
   - 拡張: `unified_work`/`unified_work_member` を導入。カテゴリ横断の同一題材を束ねて連想可能
-  - 追記: `KB/USAGE.md` に入力キーと意味（テーブル別）を追加
 
 ## 影響/互換性
 - WebSocketスキーマは不変。UI変更なし
