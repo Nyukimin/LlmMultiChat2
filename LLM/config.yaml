@@ -5,6 +5,11 @@ characters:
     provider: "ollama" # Ollamaを使用
     model: "7shi/llm-jp-3-ezo-humanities:3.7b-instruct-q8_0"
     base_url: "http://192.168.1.33:11434"
+    generation:
+      temperature: 0.8
+      top_p: 0.95
+      repeat_penalty: 1.05
+      num_predict: 220
 
   - name: "CLARIS"
     display_name: "クラリス"
@@ -12,6 +17,11 @@ characters:
     provider: "ollama" # Ollamaを使用
     model: "7shi/llm-jp-3-ezo-humanities:3.7b-instruct-q8_0"
     base_url: "http://192.168.1.33:11434"
+    generation:
+      temperature: 0.8
+      top_p: 0.95
+      repeat_penalty: 1.05
+      num_predict: 220
 
   - name: "NOX"
     display_name: "ノクス"
@@ -19,6 +29,11 @@ characters:
     provider: "ollama" # Ollamaを使用
     model: "7shi/llm-jp-3-ezo-humanities:3.7b-instruct-q8_0"
     base_url: "http://192.168.1.33:11434"
+    generation:
+      temperature: 0.8
+      top_p: 0.95
+      repeat_penalty: 1.05
+      num_predict: 220
 
 logs:
   conversation_dir: "LLM/logs"   # 任意に変更可（例: "logs/conversations"）

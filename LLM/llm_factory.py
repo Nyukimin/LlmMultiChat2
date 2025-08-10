@@ -89,25 +89,30 @@ class LLMFactory:
         self.operation_log_filename = operation_log_filename
         write_operation_log(self.operation_log_filename, "INFO", "LLMFactory", "Initializing LLMFactory.")
 
-    def create_llm(self, provider: str, model: str, base_url: Optional[str] = None):
+    def create_llm(self, provider: str, model: str, base_url: Optional[str] = None, gen_params: Optional[Dict[str, object]] = None):
         write_operation_log(self.operation_log_filename, "INFO", "LLMFactory", f"Creating LLM with provider: {provider}, model: {model}")
         try:
             provider_l = (provider or "").lower()
             if provider_l == "ollama":
+                temperature = float((gen_params or {}).get("temperature", 0.7))
+                top_p = float((gen_params or {}).get("top_p", 0.95))
+                repeat_penalty = float((gen_params or {}).get("repeat_penalty", 1.05))
+                num_predict = int((gen_params or {}).get("num_predict", 220))
                 return AsyncOllamaClient(
                     base_url=base_url or "http://localhost:11434",
                     model=model,
-                    temperature=0.2,
-                    top_p=0.9,
-                    repeat_penalty=1.1,
-                    num_predict=160,
+                    temperature=temperature,
+                    top_p=top_p,
+                    repeat_penalty=repeat_penalty,
+                    num_predict=num_predict,
                     operation_log_filename=self.operation_log_filename,
                 )
             elif provider_l == "openai":
+                temperature = float((gen_params or {}).get("temperature", 0.7))
                 return AsyncOpenAIChatClient(
                     model=model,
                     base_url=base_url,
-                    temperature=0.0,
+                    temperature=temperature,
                     operation_log_filename=self.operation_log_filename,
                 )
             else:

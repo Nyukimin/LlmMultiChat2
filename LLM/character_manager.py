@@ -36,10 +36,11 @@ class CharacterManager:
         
         if character_config:
             provider = character_config.get("provider", "openai")
-            model = character_config.get("model", "gpt-4")
+            model = character_config.get("model", "gpt-4o-mini")
             base_url = character_config.get("base_url", None)
+            gen_params = character_config.get("generation", {}) or {}
             
-            llm = self.llm_manager.get_llm(character_name, provider, model, self.llm_factory, base_url)
+            llm = self.llm_manager.get_llm(character_name, provider, model, self.llm_factory, base_url, gen_params)
             
             write_operation_log(self.operation_log_filename, "INFO", "CharacterManager", f"LLM retrieved for {character_name}.")
             return llm

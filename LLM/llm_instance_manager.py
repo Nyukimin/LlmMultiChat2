@@ -10,10 +10,10 @@ class LLMInstanceManager:
         self.llm_instances: Dict[str, any] = {}
         write_operation_log(self.operation_log_filename, "INFO", "LLMInstanceManager", "Initializing LLMInstanceManager.")
 
-    def get_llm(self, character_name: str, provider: str, model: str, llm_factory: LLMFactory, base_url: Optional[str] = None):
+    def get_llm(self, character_name: str, provider: str, model: str, llm_factory: LLMFactory, base_url: Optional[str] = None, gen_params: Optional[Dict[str, object]] = None):
         if character_name not in self.llm_instances:
             write_operation_log(self.operation_log_filename, "INFO", "LLMInstanceManager", f"Creating new LLM instance for {character_name}.")
-            llm = llm_factory.create_llm(provider, model, base_url)
+            llm = llm_factory.create_llm(provider, model, base_url, gen_params or {})
             if llm:
                 self.llm_instances[character_name] = llm
             else:
