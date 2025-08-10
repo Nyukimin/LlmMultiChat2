@@ -9,6 +9,7 @@
 - HOWTOドキュメント追加
 - ルール/ペルソナの強化
 - メディアDB（SQLite+FTS）を追加（カテゴリ横断の人/作品/クレジット、統合作品対応）
+- メディアDBのUSAGEに「入力キーと意味（テーブル別まとめ）」を追記
 
 ## 主な変更
 - コア
@@ -29,8 +30,9 @@
   - `docs/HOWTO_Add_LLM.md`, `docs/HOWTO_Extend_Rules.md` 追加
   - `README.md`, `docs/SystemOverview.md` をLangGraph+HTTP方針に更新
 - メディアDB（SQLite+FTS）
-  - 追加: `KB/README.md`, `KB/USAGE.md`, `KB/schema.sql`, `KB/init_db.py`, `KB/query.py`, `KB/query_examples.sql`, `KB/example_data.sql`
+  - 追加: `KB/README.md`, `KB/USAGE.md`, `KB/schema.sql`, `KB/init_db.py`, `KB/query.py`, `KB/query_examples.sql`, `KB/example_data.sql`, `KB/query_unified.sql`, `KB/example_unified.sql`
   - 拡張: `unified_work`/`unified_work_member` を導入。カテゴリ横断の同一題材を束ねて連想可能
+  - 追記: `KB/USAGE.md` に入力キーと意味（テーブル別）を追加
 
 ## 影響/互換性
 - WebSocketスキーマは不変。UI変更なし
