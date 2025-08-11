@@ -1,0 +1,7 @@
+# KB runtime configuration
+# Max number of auto-continued searches after the initial round
+max_auto_next: 3
+
+# Default DB path for KB
+# Relative to project root or absolute path
+db_path: "KB/media.db"

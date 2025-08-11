@@ -556,6 +556,97 @@ def _select_main_eiga_url(hits: List[Dict[str, Any]]) -> Optional[str]:
     return None
 
 
+def _select_person_base_url(hits: List[Dict[str, Any]]) -> Optional[str]:
+    """eiga.com/person/<id>/ のベースURLを返す。movie/ などの下位ページはベースに揃える。"""
+    for h in hits:
+        url = (h.get("url") or h.get("href") or "").strip()
+        if not url:
+            continue
+        pr = urlparse(url)
+        if pr.netloc.lower() != "eiga.com":
+            continue
+        m = re.match(r"^/person/(\d+)/?", pr.path)
+        if m:
+            pid = m.group(1)
+            return f"https://eiga.com/person/{pid}/"
+    return None
+
+
+def _person_movie_page_urls(person_base_url: str, max_pages: int = 20) -> List[str]:
+    """person/<id>/movie/ のページURL群を生成（1,2,3...）。"""
+    urls = [person_base_url.rstrip('/') + '/movie/']
+    for p in range(2, max_pages + 1):
+        urls.append(person_base_url.rstrip('/') + f"/movie/{p}/")
+    return urls
+
+
+def _extract_movie_titles_from_person_movie_html(html: str) -> List[str]:
+    """person/<id>/movie(/page)/ のHTMLから /movie/NNNNNN/ のテキスト（作品名）を抽出。
+    ネストしたタグにも対応するため、a要素の内側HTMLをstripしてテキスト化してから抽出する。
+    """
+    titles: List[str] = []
+    for inner in re.findall(r"<a[^>]+href=\"/movie/\d+/\"[^>]*>([\s\S]*?)</a>", html, re.IGNORECASE):
+        text = sanitize_query(_strip_html(inner))
+        if text and text not in titles:
+            titles.append(text)
+    return titles
+
+
+async def _fetch_person_all_movies(person_base_url: str) -> tuple[List[str], int]:
+    titles: List[str] = []
+    seen = set()
+    pages = 0
+    for url in _person_movie_page_urls(person_base_url):
+        try:
+            html = await _fetch_text(url)
+        except Exception:
+            break
+        page_titles = _extract_movie_titles_from_person_movie_html(html)
+        pages += 1
+        new_any = False
+        for t in page_titles:
+            if t not in seen:
+                seen.add(t)
+                titles.append(t)
+                new_any = True
+        # 新規が無ければ以降は打ち切り
+        if not new_any:
+            break
+    return titles, pages
+
+
+def _extract_person_profile(html: str) -> Dict[str, Any]:
+    """人物プロフィール（ふりがな/誕生日年/備考）を簡易抽出。"""
+    profile: Dict[str, Any] = {"kana": None, "birth_year": None, "death_year": None, "note": None}
+    text = _strip_html(html)
+    # ふりがな
+    try:
+        m = re.search(r"ふりがな[\s　]*[:：]?[\s　]*([\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FFF・\s　]+)", text)
+        if m:
+            profile["kana"] = m.group(1).strip()
+    except Exception:
+        pass
+    # 誕生日（年）
+    try:
+        m = re.search(r"誕生日[\s　]*[:：]?[\s　]*([0-9]{4})年", text)
+        if m:
+            by = int(m.group(1))
+            if 1800 <= by <= 2100:
+                profile["birth_year"] = by
+    except Exception:
+        pass
+    # 備考（プロフィール冒頭の一文を短く）
+    try:
+        # 先頭～最初の句点まで
+        s = text.strip()
+        cut = s.find("。")
+        first = s[:cut+1] if cut != -1 else s[:200]
+        if first:
+            profile["note"] = first.strip()
+    except Exception:
+        pass
+    return profile
+
 def _parse_eiga_movie_id(url: str) -> Optional[str]:
     try:
         pr = urlparse(url)
@@ -714,6 +805,31 @@ def _is_effectively_empty_payload(data: Dict[str, Any]) -> bool:
     return not any(len(data.get(k) or []) for k in ["persons", "works", "credits", "external_ids", "unified"]) 
 
 
+def _select_next_keyword(db_path: str, candidates: List[str]) -> Optional[str]:
+    """候補キーワードの先頭から順に、DBに存在しないものを返す（person.name と work.title を厳密一致で確認）。
+    見つからなければ None。
+    """
+    try:
+        db_abs = os.path.abspath(db_path)
+        conn = sqlite3.connect(db_abs)
+        with conn:
+            for raw in candidates or []:
+                kw = str(raw or "").strip()
+                if not kw:
+                    continue
+                # person/ work のどちらにも無ければ採用
+                cur = conn.execute("SELECT 1 FROM person WHERE name=? LIMIT 1", (kw,))
+                if cur.fetchone():
+                    continue
+                cur = conn.execute("SELECT 1 FROM work WHERE title=? LIMIT 1", (kw,))
+                if cur.fetchone():
+                    continue
+                return kw
+    except Exception:
+        pass
+    return None
+
+
 async def run_ingest_mode(
     topic: str,
     domain: str,
@@ -722,6 +838,9 @@ async def run_ingest_mode(
     expand: bool = True,
     strict: bool = False,
     log_callback: Optional[Callable[[str], None]] = None,
+    cancel_check: Optional[Callable[[], bool]] = None,
+    topic_type: str = "unknown",
+    auto_next_max: int = 3,
 ) -> Dict[str, Any]:
     ensure_dirs()
     log_filename = os.path.join(BASE_DIR, "logs", "ingest_conversation.log")
@@ -755,8 +874,19 @@ async def run_ingest_mode(
     executed_queries = set()  # type: ignore[var-annotated]
     next_query_queue: List[str] = []
     base_topic = sanitize_query(topic)
+    base_type = (topic_type or "unknown").lower()
     _log(f"Start ingest: topic='{topic}', domain='{domain}', rounds={rounds}, strict={strict}")
-    for r in range(max(1, rounds)):
+    iter_max = max(1, rounds)
+    auto_budget = max(0, int(auto_next_max))
+    r = 0
+    while r < iter_max:
+        # STOPボタン/外部キャンセルの確認
+        try:
+            if cancel_check and cancel_check():
+                _log("Cancelled by user request")
+                break
+        except Exception:
+            pass
         # 次に叩く検索クエリを決定
         if expand and next_query_queue:
             current_query = sanitize_query(next_query_queue.pop(0))
@@ -766,6 +896,15 @@ async def run_ingest_mode(
             current_query = sanitize_query(topic)
         executed_queries.add(current_query)
         _log(f"Search query: {current_query}")
+        # 現在のクエリのタイプ（人物/作品）を推定/保持
+        def _infer_type(q: str) -> str:
+            t = base_type
+            if t not in ("work", "person"):
+                # 簡易判定: 漢字2文字以上を含み、一般名詞っぽくなければ人物寄り などの軽いヒューリスティック
+                # ここでは指定が無い場合は unknown のまま運用
+                t = "unknown"
+            return t
+        current_type = _infer_type(current_query)
 
         # DuckDuckGo 検索を先に実施し、上位結果をヒントとして同梱
         try:
@@ -818,8 +957,9 @@ async def run_ingest_mode(
                     if len(merged_hits) >= MAX_HITS_TOTAL:
                         break
 
-            # eiga.com のメイン作品ページ (/movie/<id>/) のみを優先採用
+            # eiga.com/person と movie の両方を拾い分け
             main_eiga_hits: List[Dict[str, Any]] = []
+            person_base_url: Optional[str] = _select_person_base_url(merged_hits)
             for h in merged_hits:
                 url = (h.get("url") or h.get("href") or "").strip()
                 if not url:
@@ -833,6 +973,53 @@ async def run_ingest_mode(
             structured = build_structured_hints(hits)
             structured_credits = build_structured_credit_hints(hits)
             deep = await build_deep_hints(hits)
+            # 人物ベースURLが取れたら、全映画タイトルを巡回取得
+            if person_base_url:
+                # プロフィール抽出
+                try:
+                    person_html = await _fetch_text(person_base_url)
+                    profile = _extract_person_profile(person_html)
+                except Exception:
+                    profile = {"kana": None, "birth_year": None, "death_year": None, "note": None}
+                # 映画一覧抽出
+                all_titles, pages = await _fetch_person_all_movies(person_base_url)
+                if all_titles or any(profile.values()):
+                    _log(f"PersonMovie: {len(all_titles)} items, pages={pages}")
+                    # 抽出候補に反映
+                    structured_add = ""
+                    if all_titles:
+                        structured_add = "- 作品候補: " + ", ".join(all_titles[:20])
+                    structured = (structured + "\n" + structured_add) if structured else structured_add
+                    # フィルモグラフィをペイロード化し、後段の登録に回す（role=actor として登録）
+                    person_name = sanitize_query(current_query)
+                    if person_name:
+                        filmography_payload: Dict[str, Any] = {
+                            "persons": [{
+                                "name": person_name,
+                                "kana": profile.get("kana"),
+                                "birth_year": profile.get("birth_year"),
+                                "death_year": profile.get("death_year"),
+                                "note": profile.get("note"),
+                            }],
+                            "works": [{"title": t, "category": "映画", "year": None, "subtype": None, "summary": None} for t in all_titles],
+                            "credits": [{"work": t, "person": person_name, "role": "actor", "character": None} for t in all_titles],
+                            "external_ids": [],
+                            "unified": [],
+                            "note": None,
+                            "next_queries": list(all_titles),
+                        }
+                        collected.append(filmography_payload)
+                        round_payloads.append(filmography_payload)
+                    # ヒントブロック再構成
+                    hint_block = ""
+                    if hints_list:
+                        hint_block += f"\n\n## 参考ヒント(検索結果)\n{hints_list}\n"
+                    if structured:
+                        hint_block += f"\n## 抽出候補(自動)\n{structured}\n"
+                    if structured_credits:
+                        hint_block += f"\n## クレジット候補(自動)\n{structured_credits}\n"
+                    if deep:
+                        hint_block += f"\n## 詳細抽出(サイト精読)\n{deep}\n"
         except Exception:
             hints_list = ""
             structured = ""
@@ -871,6 +1058,16 @@ async def run_ingest_mode(
             _log("Deep candidates dump end")
 
         _log(f"Hints: {len(hits) if hints_list else 0} items")
+        # 適切な検索結果が乏しい場合は人物/作品のタイプを切替（片側が空近い）
+        try:
+            if (not hits) or (('人物候補' not in structured and current_type == 'person') or ('作品候補' not in structured and current_type == 'work')):
+                if current_type in ('person','work'):
+                    current_type = 'work' if current_type == 'person' else 'person'
+                    _log(f"Switched query type: {current_type}")
+        except Exception:
+            pass
+        # このラウンドで収集したペイロード（次キーワード選定用）
+        round_payloads: List[Dict[str, Any]] = []
         for name in characters:
             persona = manager.get_persona_prompt(name)
             if strict:
@@ -900,6 +1097,7 @@ async def run_ingest_mode(
                         except Exception:
                             pass
                     collected.append(data)
+                    round_payloads.append(data)
                     write_operation_log(operation_log_filename, "INFO", "IngestMode", f"Collected payload from {name} (round {r+1}).")
                     _log(f"Collected JSON from {name}")
                     # 依然として空なら deep フォールバックを追加で補完
@@ -942,6 +1140,7 @@ async def run_ingest_mode(
                         if isinstance(data2, dict):
                             data2 = _normalize_extracted_payload(data2)
                             collected.append(data2)
+                            round_payloads.append(data2)
                             write_operation_log(operation_log_filename, "INFO", "IngestMode", f"Collected payload (retry) from {name} (round {r+1}).")
                             _log(f"Collected JSON (retry) from {name}")
                             if expand:
@@ -974,6 +1173,7 @@ async def run_ingest_mode(
                                 fallback_payload = await build_deep_payload(hits)
                                 if any(fallback_payload.get(k) for k in ("persons","works","credits","external_ids")):
                                     collected.append(fallback_payload)
+                                    round_payloads.append(fallback_payload)
                                     write_operation_log(operation_log_filename, "INFO", "IngestMode", f"Collected payload (fallback-deep) (round {r+1}).")
                                     _log("Collected fallback payload (deep)")
                             except Exception:
@@ -997,6 +1197,7 @@ async def run_ingest_mode(
                             fallback_payload = await build_deep_payload(hits)
                             if any(fallback_payload.get(k) for k in ("persons","works","credits","external_ids")):
                                 collected.append(fallback_payload)
+                                round_payloads.append(fallback_payload)
                                 write_operation_log(operation_log_filename, "INFO", "IngestMode", f"Collected payload (fallback-deep) (round {r+1}).")
                                 _log("Collected fallback payload (deep)")
                         except Exception:
@@ -1011,7 +1212,73 @@ async def run_ingest_mode(
                 write_operation_log(operation_log_filename, "ERROR", "IngestMode", f"Error from {name} (round {r+1}): {e}")
                 _log(f"Error from {name}: {e}")
 
+        # ラウンド末に次検索キーワードを先頭に追加
+        try:
+            next_candidates_round: List[str] = []
+            for p in round_payloads:
+                for q in (p.get("next_queries") or []):
+                    qs = sanitize_query(str(q))
+                    if qs and qs not in next_candidates_round:
+                        next_candidates_round.append(qs)
+            # 人物ページ由来の全作品名を優先してnextに反映（存在チェックは後段で実施）
+            if person_base_url:
+                try:
+                    all_titles, _pg = await _fetch_person_all_movies(person_base_url)
+                    for t in all_titles:
+                        st = sanitize_query(t)
+                        if st and st not in next_candidates_round:
+                            next_candidates_round.append(st)
+                except Exception:
+                    pass
+            if not next_candidates_round:
+                for p in round_payloads:
+                    for pr in (p.get("persons") or []):
+                        n = sanitize_query(pr.get("name") or "")
+                        if n and n not in next_candidates_round:
+                            next_candidates_round.append(n)
+                    for w in (p.get("works") or []):
+                        n = sanitize_query(w.get("title") or "")
+                        if n and n not in next_candidates_round:
+                            next_candidates_round.append(n)
+            nk = _select_next_keyword(db_path, next_candidates_round)
+            if nk and nk not in executed_queries and nk not in next_query_queue:
+                next_query_queue.insert(0, nk)
+                _log(f"Enqueued next keyword: {nk} ({current_type or 'unknown'})")
+        except Exception:
+            pass
+
+        r += 1
+        # 自動継続（予算がありキューもある場合、即座に次ラウンドへ）
+        if next_query_queue and auto_budget > 0:
+            auto_budget -= 1
+            iter_max += 1  # 追加ラウンドを許容
+            continue
+        # 予算切れ あるいは キュー無しで終了
+        if not next_query_queue or auto_budget <= 0:
+            break
+
     merged = merge_payloads(collected)
+
+    # next keyword selection
+    next_candidates: List[str] = []
+    # 1) LLMの next_queries を優先
+    for p in collected:
+        for q in (p.get("next_queries") or []):
+            qs = sanitize_query(str(q))
+            if qs and qs not in next_candidates:
+                next_candidates.append(qs)
+    # 2) 補助: persons/works の名前/タイトルからも候補を補完
+    if not next_candidates:
+        for p in merged.get("persons") or []:
+            n = sanitize_query(p.get("name") or "")
+            if n and n not in next_candidates:
+                next_candidates.append(n)
+        for w in merged.get("works") or []:
+            n = sanitize_query(w.get("title") or "")
+            if n and n not in next_candidates:
+                next_candidates.append(n)
+
+    next_keyword: Optional[str] = _select_next_keyword(db_path, next_candidates)
 
     if ingest_payload is None:
         write_operation_log(operation_log_filename, "ERROR", "IngestMode", "KB.ingest not available; skipping DB registration.")
@@ -1145,6 +1412,16 @@ async def run_ingest_mode(
                                 _log(f"- {nm} [id:{pid if pid is not None else '-'}]")
                 except Exception:
                     pass
+            except Exception:
+                pass
+            # NextKeyword を最後に出力
+            try:
+                if next_keyword:
+                    _log(f"NextKeyword: {next_keyword}")
+                elif next_candidates:
+                    _log(f"NextKeyword: (no-new) first-candidate='{next_candidates[0]}'")
+                else:
+                    _log("NextKeyword: (none)")
             except Exception:
                 pass
         except Exception as e:

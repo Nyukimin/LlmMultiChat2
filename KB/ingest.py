@@ -113,7 +113,32 @@ def ingest_payload(db_path: str, payload: Dict[str, Any]) -> None:
         with conn:
             # persons
             for p in payload.get("persons", []) or []:
-                pid = _get_or_create_person(conn, p.get("name", "").strip())
+                name = (p.get("name") or "").strip()
+                if not name:
+                    continue
+                pid = _get_or_create_person(conn, name)
+                # Optional fields update (if provided)
+                kana = p.get("kana")
+                birth_year = p.get("birth_year")
+                death_year = p.get("death_year")
+                note = p.get("note")
+                updates = []
+                params = []
+                if kana is not None:
+                    updates.append("kana=?")
+                    params.append(kana)
+                if birth_year is not None:
+                    updates.append("birth_year=?")
+                    params.append(birth_year)
+                if death_year is not None:
+                    updates.append("death_year=?")
+                    params.append(death_year)
+                if note is not None:
+                    updates.append("note=?")
+                    params.append(note)
+                if updates:
+                    params.append(pid)
+                    conn.execute(f"UPDATE person SET {', '.join(updates)} WHERE id=?", tuple(params))
                 for al in (p.get("aliases") or []):
                     _add_alias(conn, "person", pid, al)
             # works

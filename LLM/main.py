@@ -19,6 +19,8 @@ from readiness_checker import ensure_ollama_model_ready_sync
 from ingest_mode import run_ingest_mode  # type: ignore
 import json
 from web_search import search_text
+import yaml
+import sqlite3
 
 app = FastAPI()
 
@@ -37,6 +39,21 @@ operation_log_filename = ""
 conversation_log_dir = None
 operation_log_dir = None
 _last_ingest_result_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "logs", "last_ingest.json")
+_stop_flags: dict[str, bool] = {}
+
+def _resolve_kb_db_path() -> str:
+    try:
+        kb_cfg_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'KB', 'config.yaml')
+        kb_dir = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'KB'))
+        with open(kb_cfg_path, 'r', encoding='utf-8') as f:
+            kb_cfg = yaml.safe_load(f) or {}
+        db_path = kb_cfg.get('db_path') or 'media.db'
+        if not os.path.isabs(db_path):
+            db_path = os.path.abspath(os.path.join(kb_dir, db_path))
+        return db_path
+    except Exception:
+        # フォールバック: 既定の KB/media.db（絶対化）
+        return os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'KB', 'media.db'))
 
 @app.on_event("startup")
 async def startup_event():
@@ -117,15 +134,34 @@ async def api_ingest(payload: dict = Body(...)):
     topic = str(payload.get("topic") or "").strip()
     domain = str(payload.get("domain") or "映画").strip()
     rounds = int(payload.get("rounds") or 1)
-    db = str(payload.get("db") or os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "KB", "media.db"))
+    # KB設定を読み込み
+    default_db = _resolve_kb_db_path()
+    db = str(payload.get("db") or default_db)
     strict = bool(payload.get("strict") or False)
+    topic_type = str(payload.get("topicType") or "unknown").strip().lower()
+    # KB設定から最大自動巡回数を取得（無ければ3）
+    # KB設定からオート継続回数
+    try:
+        kb_cfg_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'KB', 'config.yaml')
+        with open(kb_cfg_path, 'r', encoding='utf-8') as f:
+            kb_cfg = yaml.safe_load(f) or {}
+        v = kb_cfg.get('max_auto_next') if isinstance(kb_cfg, dict) else None
+    except Exception:
+        v = None
+    auto_next_max = v if isinstance(v, int) and v >= 0 else 3
     lm.write_operation_log(operation_log_filename, "INFO", "API", f"Ingest requested: topic={topic}, domain={domain}, rounds={rounds}, strict={strict}")
     # ログをフロントへ逐次返すための簡易バッファ
     logs: list[str] = []
     def _cb(m: str) -> None:
         logs.append(m)
 
-    result = await run_ingest_mode(topic, domain, rounds, db, expand=True, strict=strict, log_callback=_cb)
+    # STOPボタン対応: /api/ingest 呼び出し単位の簡易フラグ
+    session_id = str(payload.get("session") or "default-session")
+    _stop_flags.setdefault(session_id, False)
+    def _cancel() -> bool:
+        return bool(_stop_flags.get(session_id))
+
+    result = await run_ingest_mode(topic, domain, rounds, db, expand=True, strict=strict, log_callback=_cb, cancel_check=_cancel, topic_type=topic_type, auto_next_max=auto_next_max)
     try:
         os.makedirs(os.path.dirname(_last_ingest_result_path), exist_ok=True)
         with open(_last_ingest_result_path, "w", encoding="utf-8") as f:
@@ -134,10 +170,33 @@ async def api_ingest(payload: dict = Body(...)):
         pass
     return {"ok": True, "result": result, "logs": logs}
 
+@app.post("/api/ingest/stop")
+async def api_ingest_stop(payload: dict = Body(...)):
+    session_id = str(payload.get("session") or "default-session")
+    _stop_flags[session_id] = True
+    return {"ok": True}
+
+@app.post("/api/kb/init")
+async def api_kb_init(payload: dict = Body(...)):
+    """明示初期化。自動初期化は行わない方針のため、UIからの要請でのみ実施。"""
+    db = str(payload.get("db") or _resolve_kb_db_path())
+    schema_path = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'KB', 'schema.sql'))
+    try:
+        with open(schema_path, 'r', encoding='utf-8') as f:
+            schema_sql = f.read()
+        os.makedirs(os.path.dirname(db), exist_ok=True)
+        with sqlite3.connect(db) as conn:
+            conn.executescript(schema_sql)
+            conn.commit()
+        return {"ok": True, "db_path": db}
+    except Exception as e:
+        return {"ok": False, "error": str(e), "db_path": db}
+
 # ==== KB Query API ====
 
 def _default_db_path() -> str:
-    return os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "KB", "media.db")
+    # KB/config.yaml の db_path（相対なら KB 直下基準）を解決
+    return _resolve_kb_db_path()
 
 def _open_db(db_path: Optional[str] = None) -> sqlite3.Connection:
     path = db_path or _default_db_path()

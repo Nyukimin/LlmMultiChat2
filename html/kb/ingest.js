@@ -8,6 +8,11 @@ document.addEventListener('DOMContentLoaded', () => {
   const strictEl = document.getElementById('strict');
   const runBtn = document.getElementById('run');
   const clearBtn = document.getElementById('clear');
+  const stopBtn = document.getElementById('stop');
+  const initKbBtn = document.getElementById('init-kb');
+  const initConfirm = document.getElementById('init-confirm');
+  const initYes = document.getElementById('init-yes');
+  const initNo = document.getElementById('init-no');
   const suggestQEl = document.getElementById('suggest-q');
   const suggestBtn = document.getElementById('suggest-btn');
   const suggestListEl = document.getElementById('suggest-list');
@@ -18,12 +23,16 @@ document.addEventListener('DOMContentLoaded', () => {
     logEl.scrollTop = logEl.scrollHeight;
   };
 
+  let currentSession = null;
+
   const runIngest = async () => {
     const topic = (topicEl.value || '').trim();
     const topicType = (topicTypeEls.find(r => r.checked)?.value) || 'unknown';
     const domain = domainEl.value;
     const rounds = parseInt(roundsEl.value || '1', 10) || 1;
     const strict = !!strictEl.checked;
+    const session = `${Date.now()}-${Math.random().toString(36).slice(2,8)}`;
+    currentSession = session;
     if (!topic) { log('トピックが未入力です'); return; }
 
     log(`呼び出し開始 topic='${topic}', type=${topicType}, domain='${domain}', rounds=${rounds}, strict=${strict}`);
@@ -32,7 +41,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const res = await fetch('/api/ingest', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ topic, domain, rounds, strict, topicType })
+        body: JSON.stringify({ topic, domain, rounds, strict, topicType, session })
       });
       const data = await res.json();
       if (!data || !data.ok) {
@@ -56,6 +65,38 @@ document.addEventListener('DOMContentLoaded', () => {
 
   runBtn.addEventListener('click', runIngest);
   clearBtn.addEventListener('click', () => { logEl.textContent=''; summaryEl.textContent=''; });
+  stopBtn.addEventListener('click', async () => {
+    try {
+      const s = currentSession || 'default-session';
+      await fetch('/api/ingest/stop', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ session: s }) });
+      log('停止要求を送信しました');
+    } catch (e) {
+      log(`停止要求エラー: ${e}`);
+    }
+  });
+
+  // KB初期化（2段構成）
+  initKbBtn.addEventListener('click', () => {
+    initConfirm.style.display = 'block';
+  });
+  initNo.addEventListener('click', () => {
+    initConfirm.style.display = 'none';
+  });
+  initYes.addEventListener('click', async () => {
+    try {
+      const res = await fetch('/api/kb/init', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({}) });
+      const data = await res.json();
+      if (!data || !data.ok) {
+        log(`KB初期化失敗: ${(data && data.error) || 'unknown error'}`);
+      } else {
+        log(`KB初期化完了: ${data.db_path}`);
+      }
+    } catch (e) {
+      log(`KB初期化エラー: ${e}`);
+    } finally {
+      initConfirm.style.display = 'none';
+    }
+  });
 
   const renderSuggest = (items=[]) => {
     suggestListEl.innerHTML = '';

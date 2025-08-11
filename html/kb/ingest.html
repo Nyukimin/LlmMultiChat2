@@ -51,6 +51,8 @@
       </div>
       <div class="actions">
         <button id="run">収集して登録</button>
+        <button id="stop" class="danger">停止</button>
+        <button id="init-kb" class="danger">KB初期化</button>
         <button id="clear">ログをクリア</button>
       </div>
     </section>
@@ -63,6 +65,11 @@
     <section class="result">
       <h2>結果サマリ</h2>
       <pre id="summary" class="summary"></pre>
+      <div id="init-confirm" style="display:none; background:#fee; border:1px solid #c00; padding:8px; margin-top:8px;">
+        <p>KBを初期化します。既存データは失われます。実行しますか？</p>
+        <button id="init-yes" class="danger">はい（初期化）</button>
+        <button id="init-no">いいえ（キャンセル）</button>
+      </div>
     </section>
 
     <section class="links">
