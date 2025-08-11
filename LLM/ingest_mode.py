@@ -148,6 +148,97 @@ def sanitize_query(query: str) -> str:
     return q
 
 
+# ---- 検索/ヒント強化用ユーティリティ ----
+MAX_RESULTS_PER_QUERY = 12  # 1クエリあたり取得件数（従来: 8）
+MAX_HITS_TOTAL = 20         # まとめて採用する最大件数（従来: 8）
+
+ROLE_KEYWORDS = {
+    "監督": "director",
+    "主演": "actor",
+    "出演": "actor",
+    "キャスト": "actor",
+    "声優": "voice",
+    "脚本": "screenplay",
+    "原作": "author",
+    "音楽": "composer",
+}
+
+def extract_candidates_from_text(title: str, snippet: str) -> Dict[str, List[str]]:
+    """ヒットのタイトル/スニペットから簡易に候補を抽出。
+    - 作品候補: 「」「」/『』内の文字列
+    - 年候補: 19xx/20xx（"年" を含む形も許容）
+    - 役割候補: ROLE_KEYWORDS にマッチする日本語語句
+    - 人物候補: '○○が主演' / '監督：○○' などの単純パターンから抽出（過剰抽出は許容し、後段で正規化）
+    """
+    persons: List[str] = []
+    works: List[str] = []
+    years: List[str] = []
+    roles: List[str] = []
+
+    text = f"{title} {snippet}"
+    # 作品名候補（日本語引用符）
+    for m in re.findall(r"[「『]([^「『」』]{1,40})[」』]", text):
+        s = sanitize_query(m)
+        if s and s not in works:
+            works.append(s)
+    # 年候補
+    for m in re.findall(r"((?:19|20)\d{2})\s*年?", text):
+        if m not in years:
+            years.append(m)
+    # 役割候補
+    for jp, role in ROLE_KEYWORDS.items():
+        if jp in text and role not in roles:
+            roles.append(role)
+    # 人物候補（緩い抽出）
+    # パターン1: 「Xが主演」「X主演」
+    for m in re.findall(r"([\u4E00-\u9FFFぁ-んァ-ンA-Za-z0-9]{1,15})が主演", text):
+        s = sanitize_query(m)
+        if s and s not in persons:
+            persons.append(s)
+    for m in re.findall(r"([\u4E00-\u9FFFぁ-んァ-ンA-Za-z0-9]{1,15})主演", text):
+        s = sanitize_query(m)
+        if s and s not in persons:
+            persons.append(s)
+    # パターン2: 「監督：X」「監督 X」
+    for m in re.findall(r"監督[：: ]([\u4E00-\u9FFFぁ-んァ-ンA-Za-z0-9]{1,20})", text):
+        s = sanitize_query(m)
+        if s and s not in persons:
+            persons.append(s)
+    return {"persons": persons, "works": works, "years": years, "roles": roles}
+
+def build_structured_hints(hits: List[Dict[str, Any]]) -> str:
+    """ヒット一覧から構造化ヒントを生成。候補語を去重し適量に整える。"""
+    all_persons: List[str] = []
+    all_works: List[str] = []
+    all_years: List[str] = []
+    all_roles: List[str] = []
+    for h in hits:
+        title = str(h.get("title") or "")
+        snippet = str(h.get("snippet") or "")
+        c = extract_candidates_from_text(title, snippet)
+        for k, acc, limit in (
+            ("persons", all_persons, 20),
+            ("works", all_works, 20),
+            ("years", all_years, 20),
+            ("roles", all_roles, 10),
+        ):
+            for v in c.get(k, []):
+                if v and v not in acc:
+                    acc.append(v)
+                if len(acc) >= limit:
+                    break
+    lines: List[str] = []
+    if all_persons:
+        lines.append("- 人物候補: " + ", ".join(all_persons[:20]))
+    if all_works:
+        lines.append("- 作品候補: " + ", ".join(all_works[:20]))
+    if all_years:
+        lines.append("- 年候補: " + ", ".join(all_years[:20]))
+    if all_roles:
+        lines.append("- 役割候補: " + ", ".join(all_roles[:10]))
+    return "\n".join(lines)
+
+
 def _merge_list_unique(items: List[Dict[str, Any]], keys: List[str]) -> List[Dict[str, Any]]:
     seen = set()
     out: List[Dict[str, Any]] = []
@@ -286,9 +377,9 @@ async def run_ingest_mode(
             merged_hits: List[Dict[str, Any]] = []
             seen_urls = set()
             for q in search_plan:
-                if len(merged_hits) >= 8:
+                if len(merged_hits) >= MAX_HITS_TOTAL:
                     break
-                partial = search_text(q, region="jp-jp", max_results=8, safesearch="moderate")
+                partial = search_text(q, region="jp-jp", max_results=MAX_RESULTS_PER_QUERY, safesearch="moderate")
                 for h in partial:
                     url = (h.get("url") or h.get("href") or "").strip()
                     if not url:
@@ -312,16 +403,34 @@ async def run_ingest_mode(
                         # 非映画ドメインは緩やかに許容（deny除外のみ）
                         seen_urls.add(url)
                         merged_hits.append(h)
-                    if len(merged_hits) >= 8:
+                    if len(merged_hits) >= MAX_HITS_TOTAL:
                         break
 
             hits = merged_hits
-            hints = "\n".join([f"- {h.get('title')} :: {h.get('url') or h.get('href')} :: {h.get('snippet')}" for h in hits])
+            hints_list = "\n".join([f"- {h.get('title')} :: {h.get('url') or h.get('href')} :: {h.get('snippet')}" for h in hits])
+            structured = build_structured_hints(hits)
         except Exception:
-            hints = ""
-        hint_block = f"\n\n## 参考ヒント(検索結果)\n{hints}\n" if hints else ""
+            hints_list = ""
+            structured = ""
+        hint_block = ""
+        if hints_list:
+            hint_block += f"\n\n## 参考ヒント(検索結果)\n{hints_list}\n"
+        if structured:
+            hint_block += f"\n## 抽出候補(自動)\n{structured}\n"
 
-        _log(f"Hints: {len(hits) if hints else 0} items")
+        # ヒント全文をログへ書き出し
+        if hints_list:
+            _log("Hints dump begin")
+            for ln in hints_list.splitlines():
+                _log(ln)
+            _log("Hints dump end")
+        if structured:
+            _log("Candidates dump begin")
+            for ln in structured.splitlines():
+                _log(ln)
+            _log("Candidates dump end")
+
+        _log(f"Hints: {len(hits) if hints_list else 0} items")
         for name in characters:
             persona = manager.get_persona_prompt(name)
             if strict:
