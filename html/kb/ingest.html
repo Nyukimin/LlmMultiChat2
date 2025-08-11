@@ -17,6 +17,16 @@
       <div class="field">
         <label>トピック</label>
         <input id="topic" type="text" placeholder="例: 吉沢亮 国宝" />
+        <div class="topic-type">
+          <label><input type="radio" name="topicType" value="unknown" checked> 不明</label>
+          <label><input type="radio" name="topicType" value="person"> 俳優名</label>
+          <label><input type="radio" name="topicType" value="work"> 作品名</label>
+        </div>
+        <div class="suggest">
+          <input id="suggest-q" type="text" placeholder="サジェスト検索（eiga.com/person, /movie）」 />
+          <button id="suggest-btn">候補表示</button>
+          <ul id="suggest-list"></ul>
+        </div>
       </div>
       <div class="row">
         <div class="field">

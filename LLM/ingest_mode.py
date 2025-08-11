@@ -151,10 +151,10 @@ def sanitize_query(query: str) -> str:
 
 # ---- 検索/ヒント強化用ユーティリティ ----
 MAX_RESULTS_PER_QUERY = 12  # 1クエリあたり取得件数（従来: 8）
-MAX_HITS_TOTAL = 20         # まとめて採用する最大件数（従来: 8）
+MAX_HITS_TOTAL = 8          # まとめて採用する最大件数（従来: 8）
 MAX_DEEP_FETCH = 6          # 精読する最大件数
 FETCH_TIMEOUT_SEC = 8.0
-FETCH_BYTES_LIMIT = 20000   # 過大ページの取り過ぎ防止
+FETCH_BYTES_LIMIT = 100000  # 過大ページの取り過ぎ防止（詳細抽出向けに拡大）
 
 ROLE_KEYWORDS = {
     "監督": "director",
@@ -325,14 +325,95 @@ def _extract_meta_title(html: str) -> str:
     return m2.group(1).strip() if m2 else ""
 
 
-def deep_extract_from_page(url: str, html: str) -> Dict[str, List[str]]:
-    result: Dict[str, List[str]] = {"director": [], "actor": [], "voice": [], "screenplay": [], "author": [], "composer": [], "year": [], "work": []}
+def _iter_json_ld(html: str) -> List[Dict[str, Any]]:
+    """<script type="application/ld+json"> ... を列挙してJSONを返す（壊れに強く）。"""
+    objs: List[Dict[str, Any]] = []
+    try:
+        blocks = re.findall(r"<script[^>]*type=\"application/ld\+json\"[^>]*>([\s\S]*?)</script>", html, re.IGNORECASE)
+        for b in blocks:
+            txt = b.strip()
+            # JSONの前後にHTMLコメントや余計なテキストが混ざる場合があるので緩く整形
+            try:
+                data = json.loads(txt)
+            except Exception:
+                try:
+                    # 最初の { から最後の } まで
+                    i1, i2 = txt.find('{'), txt.rfind('}')
+                    if i1 != -1 and i2 != -1 and i2 > i1:
+                        data = json.loads(txt[i1:i2+1])
+                    else:
+                        continue
+                except Exception:
+                    continue
+            # data が配列や@graphを含む場合をフラット化
+            def _flatten(x: Any):
+                if isinstance(x, list):
+                    for it in x:
+                        _flatten(it)
+                elif isinstance(x, dict):
+                    if '@graph' in x and isinstance(x['@graph'], list):
+                        for it in x['@graph']:
+                            _flatten(it)
+                    else:
+                        objs.append(x)
+            _flatten(data)
+    except Exception:
+        pass
+    return objs
+
+
+def deep_extract_from_page(url: str, html: str) -> Dict[str, Any]:
+    result: Dict[str, Any] = {"director": [], "actor": [], "voice": [], "screenplay": [], "author": [], "composer": [], "year": [], "work": [], "synopsis": "", "title": "", "cast_pairs": []}
     meta_title = _extract_meta_title(html)
     if meta_title:
         wt = sanitize_query(meta_title)
         if wt:
             result["work"].append(wt)
+            if not result.get("title"):
+                result["title"] = wt
     text = _strip_html(html)
+    # JSON-LD優先（Movieがあれば信頼）
+    try:
+        for obj in _iter_json_ld(html):
+            ty = obj.get("@type")
+            # @type が配列のこともある
+            types = [ty] if isinstance(ty, str) else (ty or [])
+            if (isinstance(types, list) and ("Movie" in types)) or ty == "Movie":
+                name = (obj.get("name") or obj.get("headline") or "").strip()
+                if name:
+                    result["title"] = result["title"] or name
+                    if name not in result["work"]:
+                        result["work"].append(name)
+                # 年/公開日
+                for k in ("datePublished", "releaseDate"):
+                    v = str(obj.get(k) or "")
+                    m = re.search(r"(19|20)\d{2}", v)
+                    if m and m.group(0) not in result["year"]:
+                        result["year"].append(m.group(0))
+                # あらすじ
+                desc = (obj.get("description") or "").strip()
+                if desc and (len(desc) > len(result.get("synopsis") or "")):
+                    result["synopsis"] = desc
+                # スタッフ/キャスト
+                def _collect_people(field: str, key: str):
+                    val = obj.get(field)
+                    if not val:
+                        return
+                    items = val if isinstance(val, list) else [val]
+                    for it in items:
+                        if isinstance(it, dict):
+                            nm = (it.get("name") or it.get("title") or "").strip()
+                        else:
+                            nm = str(it).strip()
+                        if nm and nm not in result[key]:
+                            result[key].append(nm)
+                _collect_people("actor", "actor")
+                _collect_people("director", "director")
+                _collect_people("author", "author")
+                _collect_people("creator", "author")
+                _collect_people("musicBy", "composer")
+    except Exception:
+        pass
     # 年
     for y in re.findall(r"((?:19|20)\d{2})\s*年", text):
         if y not in result["year"]:
@@ -365,6 +446,15 @@ def deep_extract_from_page(url: str, html: str) -> Dict[str, List[str]]:
         n = sanitize_query(m)
         if n and n not in result["actor"]:
             result["actor"].append(n)
+    # og:description を synopsis として補完
+    try:
+        mdesc = re.search(r"<meta[^>]*name=\"description\"[^>]*content=\"([^\"]*)\"", html, re.IGNORECASE)
+        if mdesc:
+            d = mdesc.group(1).strip()
+            if d and len(d) > len(result.get("synopsis") or ""):
+                result["synopsis"] = d
+    except Exception:
+        pass
     return result
 
 
@@ -378,7 +468,12 @@ async def build_deep_hints(hits: List[Dict[str, Any]]) -> str:
         if not url:
             continue
         host = urlparse(url).netloc.lower()
-        if host not in {"natalie.mu", "movies.yahoo.co.jp", "eiga.com"}:
+        # eiga.com はメイン作品ページ (/movie/<id>/) のみ対象にする
+        if host == "eiga.com":
+            pr = urlparse(url)
+            if not re.match(r"^/movie/\d+/?$", pr.path):
+                continue
+        elif host != "movies.yahoo.co.jp":
             continue
         try:
             html = await _fetch_text(url)
@@ -396,8 +491,11 @@ async def build_deep_hints(hits: List[Dict[str, Any]]) -> str:
                     lines.append(f"- {label}: " + ", ".join(vals[:limit]))
             if data.get("year"):
                 lines.append("- 年: " + ", ".join(data["year"][:5]))
-            if data.get("work"):
-                lines.append("- 作品名候補(タイトル): " + ", ".join(data["work"][:3]))
+            if data.get("title") or data.get("work"):
+                ttl = data.get("title") or (", ".join(data["work"][:1]))
+                lines.append("- タイトル: " + ttl)
+            if data.get("synopsis"):
+                lines.append("- あらすじ: " + (data["synopsis"][:300] + ("..." if len(data["synopsis"])>300 else "")))
             count += 1
         except Exception:
             continue
@@ -549,17 +647,16 @@ async def run_ingest_mode(
             dom = str(domain or "")
             if "映画" in dom:
                 search_plan = [
-                    f"{current_query} site:natalie.mu",
-                    f"{current_query} site:movies.yahoo.co.jp",
                     f"{current_query} site:eiga.com",
                     f"{current_query} 映画.com",
                     f"{current_query} 映画com",
+                    f"{current_query} site:movies.yahoo.co.jp",
                     f"{current_query} site:.jp",
                 ]
             else:
                 search_plan = [f"{current_query} site:.jp"]
 
-            allowed_hosts = {"natalie.mu", "movies.yahoo.co.jp", "eiga.com"}
+            allowed_hosts = {"movies.yahoo.co.jp", "eiga.com"}
             deny_hosts = {"youtube.com", "www.youtube.com", "tiktok.com", "www.tiktok.com", "jp.mercari.com"}
 
             merged_hits: List[Dict[str, Any]] = []
@@ -594,14 +691,26 @@ async def run_ingest_mode(
                     if len(merged_hits) >= MAX_HITS_TOTAL:
                         break
 
-            hits = merged_hits
+            # eiga.com のメイン作品ページ (/movie/<id>/) のみを優先採用
+            main_eiga_hits: List[Dict[str, Any]] = []
+            for h in merged_hits:
+                url = (h.get("url") or h.get("href") or "").strip()
+                if not url:
+                    continue
+                pr = urlparse(url)
+                if pr.netloc.lower() == "eiga.com" and re.match(r"^/movie/\d+/?$", pr.path):
+                    main_eiga_hits.append(h)
+
+            hits = main_eiga_hits if main_eiga_hits else merged_hits
             hints_list = "\n".join([f"- {h.get('title')} :: {h.get('url') or h.get('href')} :: {h.get('snippet')}" for h in hits])
             structured = build_structured_hints(hits)
             structured_credits = build_structured_credit_hints(hits)
+            deep = await build_deep_hints(hits)
         except Exception:
             hints_list = ""
             structured = ""
             structured_credits = ""
+            deep = ""
         hint_block = ""
         if hints_list:
             hint_block += f"\n\n## 参考ヒント(検索結果)\n{hints_list}\n"
@@ -609,6 +718,8 @@ async def run_ingest_mode(
             hint_block += f"\n## 抽出候補(自動)\n{structured}\n"
         if structured_credits:
             hint_block += f"\n## クレジット候補(自動)\n{structured_credits}\n"
+        if deep:
+            hint_block += f"\n## 詳細抽出(サイト精読)\n{deep}\n"
 
         # ヒント全文をログへ書き出し
         if hints_list:
@@ -626,6 +737,11 @@ async def run_ingest_mode(
             for ln in structured_credits.splitlines():
                 _log(ln)
             _log("Credit candidates dump end")
+        if deep:
+            _log("Deep candidates dump begin")
+            for ln in deep.splitlines():
+                _log(ln)
+            _log("Deep candidates dump end")
 
         _log(f"Hints: {len(hits) if hints_list else 0} items")
         for name in characters:

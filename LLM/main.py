@@ -18,6 +18,7 @@ import yaml
 from readiness_checker import ensure_ollama_model_ready_sync
 from ingest_mode import run_ingest_mode  # type: ignore
 import json
+from web_search import search_text
 
 app = FastAPI()
 
@@ -224,6 +225,33 @@ async def api_db_unified(title: str = Query(..., description="起点となる作
         )
         cur = conn.execute(sql, (f"%{title}%",))
         return {"ok": True, "items": [dict(r) for r in cur.fetchall()]}
+
+# ==== Suggest API ====
+@app.get("/api/suggest")
+async def api_suggest(q: str = Query(..., description="入力文字列"), type: str = Query("unknown", description="work|person|unknown"), limit: int = Query(8, ge=1, le=20)):
+    q = (q or "").strip()
+    t = (type or "unknown").lower()
+    if not q:
+        return {"ok": True, "items": []}
+    if t == "work":
+        query = f"{q} site:eiga.com/movie"
+    elif t == "person":
+        query = f"{q} site:eiga.com/person"
+    else:
+        # デフォルトは映画ドメインの可能性を考慮して作品優先
+        query = f"{q} site:eiga.com/movie"
+    try:
+        hits = search_text(query, region="jp-jp", max_results=limit, safesearch="moderate")
+    except Exception:
+        hits = []
+    items = []
+    for h in hits:
+        items.append({
+            "title": h.get("title"),
+            "url": h.get("url") or h.get("href"),
+            "snippet": h.get("snippet")
+        })
+    return {"ok": True, "items": items[:limit]}
 
 @app.websocket("/ws")
 async def ws_endpoint(websocket: WebSocket):
