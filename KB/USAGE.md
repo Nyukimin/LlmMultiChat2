@@ -86,6 +86,31 @@ python KB/query.py person "吉沢亮"   # → 人→全出演作
 python KB/query.py work   "国宝"     # → 作品→全出演者
 ```
 
+## APIサーバ経由の照会（FastAPI）
+アプリ起動後にHTTP経由で照会できます。
+
+1) サーバ起動
+```bash
+pip install -r LLM/requirements.txt
+python KB/init_db.py
+python -m uvicorn LLM.main:app --host 0.0.0.0 --port 8000 --reload
+```
+
+2) エンドポイント例
+- 人物検索: `GET /api/db/persons?keyword=吉沢`
+- 人物のクレジット: `GET /api/db/persons/{person_id}/credits`
+- 作品検索: `GET /api/db/works?keyword=国宝`
+- 作品のキャスト/スタッフ: `GET /api/db/works/{work_id}/cast`
+- FTS検索: `GET /api/db/fts?q=吉沢* OR 国宝*`
+- 統合作品（題材横断）: `GET /api/db/unified?title=国宝`
+
+3) cURL例
+```bash
+curl "http://localhost:8000/api/db/persons?keyword=吉沢"
+curl "http://localhost:8000/api/db/works?keyword=国宝"
+curl "http://localhost:8000/api/db/fts?q=吉沢*%20OR%20国宝*"
+```
+
 ## Ingest Mode（DB登録専用モード）
 LLM同士の協調で事実をJSON抽出し、`KB/media.db`へ自動登録します。
 

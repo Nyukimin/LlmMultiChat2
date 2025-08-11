@@ -1,0 +1,14 @@
+---
+description: すべてのシェル/実行コマンドは conda 環境 ChatEnv で実行する
+globs:
+  - "**/*"
+alwaysApply: true
+---
+
+- すべてのシェルコマンドは conda 環境 `ChatEnv` 内で実行すること。
+- 新しいシェル（別セッション）では最初に必ず `conda activate ChatEnv` を実行すること。
+- 非対話/一行実行やバックグラウンド実行が必要な場合は `conda run -n ChatEnv <cmd>` を用いて同等に実行してよい。
+- `pip` インストール、`python` 実行、`uvicorn` 起動、`sqlite3` などのコマンドも同様に `ChatEnv` で行うこと。
+- Windows PowerShell でも基本は `conda activate ChatEnv` を使用すること（事前に conda のシェル初期化が必要）。
+- スクリプトから外部コマンドを呼び出す際も、`ChatEnv` が有効な状態で呼び出すこと。
+- 環境名やバージョンの変更が必要な場合は、実施前に必ずユーザーの承認を得ること。

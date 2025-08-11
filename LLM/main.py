@@ -2,7 +2,9 @@ import asyncio
 import traceback
 import os
 import sys
-from fastapi import FastAPI, WebSocket, Body
+import sqlite3
+from typing import List, Optional
+from fastapi import FastAPI, WebSocket, Body, Query, Path
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import RedirectResponse
 import uvicorn
@@ -120,6 +122,98 @@ async def api_ingest(payload: dict = Body(...)):
     except Exception:
         pass
     return {"ok": True, "result": result, "logs": logs}
+
+# ==== KB Query API ====
+
+def _default_db_path() -> str:
+    return os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "KB", "media.db")
+
+def _open_db(db_path: Optional[str] = None) -> sqlite3.Connection:
+    path = db_path or _default_db_path()
+    conn = sqlite3.connect(path)
+    conn.row_factory = sqlite3.Row
+    return conn
+
+@app.get("/api/db/persons")
+async def api_db_persons(keyword: str = Query(..., description="人名の部分一致キーワード"), db: Optional[str] = Query(None)):
+    with _open_db(db) as conn:
+        cur = conn.execute(
+            "SELECT id, name FROM person WHERE name LIKE ? ORDER BY name LIMIT 50",
+            (f"%{keyword}%",),
+        )
+        return {"ok": True, "items": [dict(r) for r in cur.fetchall()]}
+
+@app.get("/api/db/persons/{person_id}/credits")
+async def api_db_person_credits(person_id: int = Path(...), db: Optional[str] = Query(None)):
+    with _open_db(db) as conn:
+        cur = conn.execute(
+            """
+            SELECT w.id AS work_id, w.title, w.year, c.role, c.character
+            FROM credit c
+            JOIN work w ON w.id=c.work_id
+            WHERE c.person_id=?
+            ORDER BY w.year IS NULL, w.year, w.title
+            """,
+            (person_id,),
+        )
+        return {"ok": True, "items": [dict(r) for r in cur.fetchall()]}
+
+@app.get("/api/db/works")
+async def api_db_works(keyword: str = Query(..., description="作品名の部分一致キーワード"), db: Optional[str] = Query(None)):
+    with _open_db(db) as conn:
+        cur = conn.execute(
+            "SELECT id, title, year FROM work WHERE title LIKE ? ORDER BY year DESC, title LIMIT 50",
+            (f"%{keyword}%",),
+        )
+        return {"ok": True, "items": [dict(r) for r in cur.fetchall()]}
+
+@app.get("/api/db/works/{work_id}/cast")
+async def api_db_work_cast(work_id: int = Path(...), db: Optional[str] = Query(None)):
+    with _open_db(db) as conn:
+        cur = conn.execute(
+            """
+            SELECT p.id AS person_id, p.name, c.role, c.character
+            FROM credit c
+            JOIN person p ON p.id=c.person_id
+            WHERE c.work_id=?
+            ORDER BY CASE c.role WHEN 'director' THEN 0 WHEN 'actor' THEN 1 ELSE 9 END, p.name
+            """,
+            (work_id,),
+        )
+        return {"ok": True, "items": [dict(r) for r in cur.fetchall()]}
+
+@app.get("/api/db/fts")
+async def api_db_fts(q: str = Query(..., description="FTS5 検索クエリ"), limit: int = Query(50, ge=1, le=200), db: Optional[str] = Query(None)):
+    with _open_db(db) as conn:
+        cur = conn.execute(
+            "SELECT kind, ref_id, snippet(fts, 1, '[', ']', '...', 10) AS snippet FROM fts WHERE fts MATCH ? LIMIT ?",
+            (q, limit),
+        )
+        return {"ok": True, "items": [dict(r) for r in cur.fetchall()]}
+
+@app.get("/api/db/unified")
+async def api_db_unified(title: str = Query(..., description="起点となる作品タイトルの部分一致"), db: Optional[str] = Query(None)):
+    with _open_db(db) as conn:
+        sql = (
+            """
+            WITH target AS (
+              SELECT uw.id AS unified_id
+              FROM work w
+              JOIN unified_work_member uwm ON uwm.work_id=w.id
+              JOIN unified_work uw ON uw.id=uwm.unified_work_id
+              WHERE w.title LIKE ?
+              LIMIT 1
+            )
+            SELECT w.id AS work_id, w.title, w.year, c.name AS category, uwm.relation
+            FROM unified_work_member uwm
+            JOIN work w ON w.id=uwm.work_id
+            JOIN category c ON c.id=w.category_id
+            JOIN target t ON t.unified_id=uwm.unified_work_id
+            ORDER BY w.year, w.title
+            """
+        )
+        cur = conn.execute(sql, (f"%{title}%",))
+        return {"ok": True, "items": [dict(r) for r in cur.fetchall()]}
 
 @app.websocket("/ws")
 async def ws_endpoint(websocket: WebSocket):

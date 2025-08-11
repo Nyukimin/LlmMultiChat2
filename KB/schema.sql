@@ -77,11 +77,34 @@ CREATE VIRTUAL TABLE IF NOT EXISTS fts USING fts5(
 CREATE TRIGGER IF NOT EXISTS trg_person_ai AFTER INSERT ON person BEGIN
   INSERT INTO fts(kind, ref_id, text) VALUES ('person', NEW.id, COALESCE(NEW.name,'')||' '||COALESCE(NEW.kana,''));
 END;
+-- 更新時は既存行を削除して再投入
+CREATE TRIGGER IF NOT EXISTS trg_person_au AFTER UPDATE ON person BEGIN
+  DELETE FROM fts WHERE kind='person' AND ref_id=OLD.id;
+  INSERT INTO fts(kind, ref_id, text) VALUES ('person', NEW.id, COALESCE(NEW.name,'')||' '||COALESCE(NEW.kana,''));
+END;
+-- 削除時はFTSからも削除
+CREATE TRIGGER IF NOT EXISTS trg_person_ad AFTER DELETE ON person BEGIN
+  DELETE FROM fts WHERE kind='person' AND ref_id=OLD.id;
+END;
 CREATE TRIGGER IF NOT EXISTS trg_work_ai AFTER INSERT ON work BEGIN
   INSERT INTO fts(kind, ref_id, text) VALUES ('work', NEW.id, COALESCE(NEW.title,'')||' '||COALESCE(NEW.summary,''));
 END;
+CREATE TRIGGER IF NOT EXISTS trg_work_au AFTER UPDATE ON work BEGIN
+  DELETE FROM fts WHERE kind='work' AND ref_id=OLD.id;
+  INSERT INTO fts(kind, ref_id, text) VALUES ('work', NEW.id, COALESCE(NEW.title,'')||' '||COALESCE(NEW.summary,''));
+END;
+CREATE TRIGGER IF NOT EXISTS trg_work_ad AFTER DELETE ON work BEGIN
+  DELETE FROM fts WHERE kind='work' AND ref_id=OLD.id;
+END;
 CREATE TRIGGER IF NOT EXISTS trg_credit_ai AFTER INSERT ON credit BEGIN
   INSERT INTO fts(kind, ref_id, text) VALUES ('credit', NEW.id, COALESCE(NEW.character,'')||' '||COALESCE(NEW.role,''));
+END;
+CREATE TRIGGER IF NOT EXISTS trg_credit_au AFTER UPDATE ON credit BEGIN
+  DELETE FROM fts WHERE kind='credit' AND ref_id=OLD.id;
+  INSERT INTO fts(kind, ref_id, text) VALUES ('credit', NEW.id, COALESCE(NEW.character,'')||' '||COALESCE(NEW.role,''));
+END;
+CREATE TRIGGER IF NOT EXISTS trg_credit_ad AFTER DELETE ON credit BEGIN
+  DELETE FROM fts WHERE kind='credit' AND ref_id=OLD.id;
 END;
 
 -- 統合作品（カテゴリ横断の同一題材/シリーズ束ね）

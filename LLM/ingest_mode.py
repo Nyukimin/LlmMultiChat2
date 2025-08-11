@@ -124,6 +124,30 @@ def extract_json(text: str) -> Optional[Dict[str, Any]]:
     return None
 
 
+def sanitize_query(query: str) -> str:
+    """検索クエリからメタ指示や余計な句点以降を除去し、端的な語に整える。
+    例: "吉沢亮 国宝 映画。JSONのみで出力、前置き禁止。」" → "吉沢亮 国宝 映画"
+    """
+    if not query:
+        return ""
+    q = str(query)
+    # 句点以降を落とす（説明やメタが続きがちなため）
+    if "。" in q:
+        q = q.split("。", 1)[0]
+    # よく混入するメタ表現を除去
+    bad_frags = [
+        "JSON", "json", "出力", "前置き", "禁止", "マークダウン", "Markdown",
+        "コード", "フェンス", "<<<JSON_START>>>", "<<<JSON_END>>>"
+    ]
+    for b in bad_frags:
+        q = q.replace(b, "")
+    # 末尾の全角/半角引用符や記号をトリム
+    q = q.strip().strip('\"\'”’』」】)').strip('「『（(“')
+    # 連続空白を単一化
+    q = re.sub(r"\s+", " ", q).strip()
+    return q
+
+
 def _merge_list_unique(items: List[Dict[str, Any]], keys: List[str]) -> List[Dict[str, Any]]:
     seen = set()
     out: List[Dict[str, Any]] = []
@@ -226,14 +250,16 @@ async def run_ingest_mode(
     # 検索クエリのキューと実行済み集合
     executed_queries = set()  # type: ignore[var-annotated]
     next_query_queue: List[str] = []
-    base_topic = topic
+    base_topic = sanitize_query(topic)
     _log(f"Start ingest: topic='{topic}', domain='{domain}', rounds={rounds}, strict={strict}")
     for r in range(max(1, rounds)):
         # 次に叩く検索クエリを決定
         if expand and next_query_queue:
-            current_query = next_query_queue.pop(0)
+            current_query = sanitize_query(next_query_queue.pop(0))
         else:
             current_query = base_topic
+        if not current_query:
+            current_query = sanitize_query(topic)
         executed_queries.add(current_query)
         _log(f"Search query: {current_query}")
 
@@ -317,7 +343,7 @@ async def run_ingest_mode(
                     if expand:
                         # LLMが提案した next_queries を優先採用
                         for q in (data.get("next_queries") or []):
-                            qstr = str(q).strip()
+                            qstr = sanitize_query(str(q))
                             if not qstr:
                                 continue
                             if qstr in executed_queries:
@@ -328,11 +354,11 @@ async def run_ingest_mode(
                         # フォールバック: persons/works から語を抽出
                         if not data.get("next_queries"):
                             for p in (data.get("persons") or []):
-                                n = (p.get("name") or "").strip()
+                                n = sanitize_query(p.get("name") or "")
                                 if n and n not in executed_queries and n not in next_query_queue:
                                     next_query_queue.append(n)
                             for w in (data.get("works") or []):
-                                n = (w.get("title") or "").strip()
+                                n = sanitize_query(w.get("title") or "")
                                 if n and n not in executed_queries and n not in next_query_queue:
                                     next_query_queue.append(n)
                 else:
@@ -348,27 +374,43 @@ async def run_ingest_mode(
                             _log(f"Collected JSON (retry) from {name}")
                             if expand:
                                 for q in (data2.get("next_queries") or []):
-                                    qstr = str(q).strip()
+                                    qstr = sanitize_query(str(q))
                                     if qstr and qstr not in executed_queries and qstr not in next_query_queue:
                                         next_query_queue.append(qstr)
                                 if not data2.get("next_queries"):
                                     for p in (data2.get("persons") or []):
-                                        n = (p.get("name") or "").strip()
+                                        n = sanitize_query(p.get("name") or "")
                                         if n and n not in executed_queries and n not in next_query_queue:
                                             next_query_queue.append(n)
                                     for w in (data2.get("works") or []):
-                                        n = (w.get("title") or "").strip()
+                                        n = sanitize_query(w.get("title") or "")
                                         if n and n not in executed_queries and n not in next_query_queue:
                                             next_query_queue.append(n)
                         else:
                             write_operation_log(operation_log_filename, "WARNING", "IngestMode", f"Non-JSON from {name} (round {r+1}).")
                             _log(f"Non-JSON from {name}")
+                            # デバッグ用に生応答を保存
+                            try:
+                                raw_path = os.path.join(BASE_DIR, "logs", f"ingest_raw_r{r+1}_{name}.txt")
+                                os.makedirs(os.path.dirname(raw_path), exist_ok=True)
+                                with open(raw_path, "w", encoding="utf-8") as f:
+                                    f.write(str(resp2))
+                            except Exception:
+                                pass
                             preview = str(resp2 or "").replace("\n", " ")[:200]
                             if preview:
                                 _log(f"Preview: {preview}")
                     else:
                         write_operation_log(operation_log_filename, "WARNING", "IngestMode", f"Non-JSON from {name} (round {r+1}).")
                         _log(f"Non-JSON from {name}")
+                        # デバッグ用に生応答を保存
+                        try:
+                            raw_path = os.path.join(BASE_DIR, "logs", f"ingest_raw_r{r+1}_{name}.txt")
+                            os.makedirs(os.path.dirname(raw_path), exist_ok=True)
+                            with open(raw_path, "w", encoding="utf-8") as f:
+                                f.write(str(resp))
+                        except Exception:
+                            pass
                         preview = str(resp or "").replace("\n", " ")[:200]
                         if preview:
                             _log(f"Preview: {preview}")
