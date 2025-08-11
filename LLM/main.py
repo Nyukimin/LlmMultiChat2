@@ -5,6 +5,7 @@ import sys
 import sqlite3
 from typing import List, Optional
 from fastapi import FastAPI, WebSocket, Body, Query, Path
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import RedirectResponse
 import uvicorn
@@ -19,6 +20,15 @@ from ingest_mode import run_ingest_mode  # type: ignore
 import json
 
 app = FastAPI()
+
+# CORS: フロントを外部サーブ/ローカルfileスキームから開いた場合でもAPIを叩けるように許可
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=False,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 app.mount("/static", StaticFiles(directory=os.path.join(os.path.dirname(os.path.abspath(__file__)), "../html"), html=True), name="static")
 

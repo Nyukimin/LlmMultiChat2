@@ -2,6 +2,7 @@ import os
 import json
 import re
 import asyncio
+import httpx
 from typing import Any, Dict, List, Optional, Callable
 from urllib.parse import urlparse
 
@@ -151,6 +152,9 @@ def sanitize_query(query: str) -> str:
 # ---- 検索/ヒント強化用ユーティリティ ----
 MAX_RESULTS_PER_QUERY = 12  # 1クエリあたり取得件数（従来: 8）
 MAX_HITS_TOTAL = 20         # まとめて採用する最大件数（従来: 8）
+MAX_DEEP_FETCH = 6          # 精読する最大件数
+FETCH_TIMEOUT_SEC = 8.0
+FETCH_BYTES_LIMIT = 20000   # 過大ページの取り過ぎ防止
 
 ROLE_KEYWORDS = {
     "監督": "director",
@@ -206,6 +210,56 @@ def extract_candidates_from_text(title: str, snippet: str) -> Dict[str, List[str
             persons.append(s)
     return {"persons": persons, "works": works, "years": years, "roles": roles}
 
+def _split_names(s: str) -> List[str]:
+    # 日本語の区切り（、，・/／ と空白）で分割
+    parts = re.split(r"[、，・/／\s]+", s)
+    return [sanitize_query(p) for p in parts if sanitize_query(p)]
+
+def extract_credit_candidates(title: str, snippet: str, works: List[str], years: List[str]) -> List[Dict[str, str]]:
+    """タイトル/スニペットから (person, role, work?, year?) の候補を抽出。
+    過剰抽出を許容し、後段の正規化/LLMでの確定に委ねる。
+    """
+    text = f"{title} {snippet}"
+    credits: List[Dict[str, str]] = []
+    work0 = works[0] if works else ""
+    year0 = years[0] if years else ""
+
+    # 監督：X / 監督 X
+    for m in re.findall(r"監督[：:\s]([\u4E00-\u9FFFぁ-んァ-ンA-Za-z0-9・ー\s]{1,30})", text):
+        for name in _split_names(m):
+            credits.append({"person": name, "role": "director", "work": work0, "year": year0})
+    # 脚本 / 原作 / 音楽
+    for jp, role in (("脚本", "screenplay"), ("原作", "author"), ("音楽", "composer")):
+        for m in re.findall(fr"{jp}[：:\s]([\u4E00-\u9FFFぁ-んァ-ンA-Za-z0-9・ー\s]{1,30})", text):
+            for name in _split_names(m):
+                credits.append({"person": name, "role": role, "work": work0, "year": year0})
+    # 出演：A、B、C / キャスト：...
+    for kw in ("出演", "キャスト", "声優", "声の出演"):
+        for m in re.findall(fr"{kw}[：:\s]([\u4E00-\u9FFFぁ-んァ-ンA-Za-z0-9・ー\s]{1,60})", text):
+            for name in _split_names(m):
+                role = "voice" if "声" in kw else "actor"
+                credits.append({"person": name, "role": role, "work": work0, "year": year0})
+    # Xが主演 / X主演
+    for m in re.findall(r"([\u4E00-\u9FFFぁ-んァ-ンA-Za-z0-9・ー]{1,20})が主演", text):
+        name = sanitize_query(m)
+        if name:
+            credits.append({"person": name, "role": "actor", "work": work0, "year": year0})
+    for m in re.findall(r"主演([\u4E00-\u9FFFぁ-んァ-ンA-Za-z0-9・ー]{1,20})", text):
+        name = sanitize_query(m)
+        if name:
+            credits.append({"person": name, "role": "actor", "work": work0, "year": year0})
+
+    # 去重
+    seen = set()
+    uniq: List[Dict[str, str]] = []
+    for c in credits:
+        key = (c["person"], c["role"], c.get("work", ""))
+        if key in seen:
+            continue
+        seen.add(key)
+        uniq.append(c)
+    return uniq
+
 def build_structured_hints(hits: List[Dict[str, Any]]) -> str:
     """ヒット一覧から構造化ヒントを生成。候補語を去重し適量に整える。"""
     all_persons: List[str] = []
@@ -236,6 +290,140 @@ def build_structured_hints(hits: List[Dict[str, Any]]) -> str:
         lines.append("- 年候補: " + ", ".join(all_years[:20]))
     if all_roles:
         lines.append("- 役割候補: " + ", ".join(all_roles[:10]))
+    return "\n".join(lines)
+
+
+def _strip_html(html: str) -> str:
+    s = html
+    # 取り回し簡易のため、ごく簡単にタグ除去
+    s = re.sub(r"<script[\s\S]*?</script>", " ", s, flags=re.IGNORECASE)
+    s = re.sub(r"<style[\s\S]*?</style>", " ", s, flags=re.IGNORECASE)
+    s = s.replace("<br>", "\n").replace("<br/>", "\n").replace("<br />", "\n")
+    s = re.sub(r"</p>", "\n", s, flags=re.IGNORECASE)
+    s = re.sub(r"<[^>]+>", " ", s)
+    s = re.sub(r"\u00A0", " ", s)  # nbsp
+    s = re.sub(r"\s+", " ", s)
+    return s.strip()
+
+
+async def _fetch_text(url: str) -> str:
+    headers = {"User-Agent": "Mozilla/5.0 (IngestBot/1.0)"}
+    async with httpx.AsyncClient(follow_redirects=True, timeout=FETCH_TIMEOUT_SEC, headers=headers) as client:
+        r = await client.get(url)
+        r.raise_for_status()
+        content = r.text
+        if len(content) > FETCH_BYTES_LIMIT:
+            content = content[:FETCH_BYTES_LIMIT]
+        return content
+
+
+def _extract_meta_title(html: str) -> str:
+    m = re.search(r"<meta[^>]*property=\"og:title\"[^>]*content=\"([^\"]+)\"", html, re.IGNORECASE)
+    if m:
+        return m.group(1).strip()
+    m2 = re.search(r"<title>([^<]+)</title>", html, re.IGNORECASE)
+    return m2.group(1).strip() if m2 else ""
+
+
+def deep_extract_from_page(url: str, html: str) -> Dict[str, List[str]]:
+    result: Dict[str, List[str]] = {"director": [], "actor": [], "voice": [], "screenplay": [], "author": [], "composer": [], "year": [], "work": []}
+    meta_title = _extract_meta_title(html)
+    if meta_title:
+        wt = sanitize_query(meta_title)
+        if wt:
+            result["work"].append(wt)
+    text = _strip_html(html)
+    # 年
+    for y in re.findall(r"((?:19|20)\d{2})\s*年", text):
+        if y not in result["year"]:
+            result["year"].append(y)
+    # 役割ごとに抽出
+    def _add_names(after: str, role_key: str):
+        # 区切り: 、,，,/／・ など
+        parts = re.split(r"[、,，/／・\s]+", after)
+        for p in parts:
+            n = sanitize_query(p)
+            if n and n not in result[role_key] and len(n) <= 30:
+                result[role_key].append(n)
+    # 監督
+    for m in re.findall(r"監督[：: ]([^。\n]+)", text):
+        _add_names(m, "director")
+    # 脚本
+    for m in re.findall(r"脚本[：: ]([^。\n]+)", text):
+        _add_names(m, "screenplay")
+    # 原作
+    for m in re.findall(r"原作[：: ]([^。\n]+)", text):
+        _add_names(m, "author")
+    # 音楽
+    for m in re.findall(r"音楽[：: ]([^。\n]+)", text):
+        _add_names(m, "composer")
+    # 出演/キャスト/主演
+    for m in re.findall(r"(?:出演|キャスト|主演)[：: ]([^。\n]+)", text):
+        _add_names(m, "actor")
+    # "Xが主演" の緩い形も追加
+    for m in re.findall(r"([\u4E00-\u9FFFぁ-んァ-ンA-Za-z0-9・]{1,20})が主演", text):
+        n = sanitize_query(m)
+        if n and n not in result["actor"]:
+            result["actor"].append(n)
+    return result
+
+
+async def build_deep_hints(hits: List[Dict[str, Any]]) -> str:
+    lines: List[str] = []
+    count = 0
+    for h in hits:
+        if count >= MAX_DEEP_FETCH:
+            break
+        url = (h.get("url") or h.get("href") or "").strip()
+        if not url:
+            continue
+        host = urlparse(url).netloc.lower()
+        if host not in {"natalie.mu", "movies.yahoo.co.jp", "eiga.com"}:
+            continue
+        try:
+            html = await _fetch_text(url)
+            data = deep_extract_from_page(url, html)
+            # 役割ごとに1行ずつ
+            for label, key, limit in (
+                ("監督", "director", 5),
+                ("脚本", "screenplay", 5),
+                ("原作", "author", 5),
+                ("音楽", "composer", 5),
+                ("出演/主演", "actor", 12),
+            ):
+                vals = data.get(key) or []
+                if vals:
+                    lines.append(f"- {label}: " + ", ".join(vals[:limit]))
+            if data.get("year"):
+                lines.append("- 年: " + ", ".join(data["year"][:5]))
+            if data.get("work"):
+                lines.append("- 作品名候補(タイトル): " + ", ".join(data["work"][:3]))
+            count += 1
+        except Exception:
+            continue
+    return "\n".join(lines)
+
+def build_structured_credit_hints(hits: List[Dict[str, Any]]) -> str:
+    lines: List[str] = []
+    total = 0
+    for h in hits:
+        title = str(h.get("title") or "")
+        snippet = str(h.get("snippet") or "")
+        c = extract_candidates_from_text(title, snippet)
+        credits = extract_credit_candidates(title, snippet, c.get("works", []), c.get("years", []))
+        if not credits:
+            continue
+        for cr in credits:
+            work = cr.get("work") or "-"
+            yr = cr.get("year") or "-"
+            person = cr.get("person") or "?"
+            role = cr.get("role") or "?"
+            lines.append(f"- {work} ({yr}) : {person} [{role}]")
+            total += 1
+            if total >= 20:
+                break
+        if total >= 20:
+            break
     return "\n".join(lines)
 
 
@@ -409,14 +597,18 @@ async def run_ingest_mode(
             hits = merged_hits
             hints_list = "\n".join([f"- {h.get('title')} :: {h.get('url') or h.get('href')} :: {h.get('snippet')}" for h in hits])
             structured = build_structured_hints(hits)
+            structured_credits = build_structured_credit_hints(hits)
         except Exception:
             hints_list = ""
             structured = ""
+            structured_credits = ""
         hint_block = ""
         if hints_list:
             hint_block += f"\n\n## 参考ヒント(検索結果)\n{hints_list}\n"
         if structured:
             hint_block += f"\n## 抽出候補(自動)\n{structured}\n"
+        if structured_credits:
+            hint_block += f"\n## クレジット候補(自動)\n{structured_credits}\n"
 
         # ヒント全文をログへ書き出し
         if hints_list:
@@ -429,6 +621,11 @@ async def run_ingest_mode(
             for ln in structured.splitlines():
                 _log(ln)
             _log("Candidates dump end")
+        if structured_credits:
+            _log("Credit candidates dump begin")
+            for ln in structured_credits.splitlines():
+                _log(ln)
+            _log("Credit candidates dump end")
 
         _log(f"Hints: {len(hits) if hints_list else 0} items")
         for name in characters:
