@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>KB Viewer</title>
+  <link rel="stylesheet" href="/static/kb/ingest.css" />
+  <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&display=swap" rel="stylesheet">
+  <script defer src="/static/kb/view.js"></script>
+</head>
+<body>
+  <div class="container">
+    <h1>KB Viewer</h1>
+    <p class="hint">DBの内容を検索・閲覧します。</p>
+
+    <section class="controls">
+      <div class="field">
+        <label>キーワード検索</label>
+        <input id="q" type="text" placeholder="例: 国宝 / 吉沢" />
+      </div>
+      <div class="row">
+        <div class="field">
+          <label>種別</label>
+          <label><input type="radio" name="kind" value="work" checked> 作品</label>
+          <label><input type="radio" name="kind" value="person"> 人物</label>
+          <label><input type="radio" name="kind" value="fts"> FTS</label>
+        </div>
+        <div class="actions">
+          <button id="search">検索</button>
+          <button id="clear">クリア</button>
+        </div>
+      </div>
+    </section>
+
+    <section class="logs">
+      <h2>結果</h2>
+      <div class="row" style="gap:16px; align-items:flex-start;">
+        <div style="flex:1; min-width:320px;">
+          <div id="list" class="log"></div>
+        </div>
+        <div style="flex:1; min-width:320px;">
+          <div id="detail" class="log"></div>
+        </div>
+      </div>
+    </section>
+  </div>
+</body>
+</html>

@@ -169,6 +169,13 @@ async def api_db_person_credits(person_id: int = Path(...), db: Optional[str] = 
         )
         return {"ok": True, "items": [dict(r) for r in cur.fetchall()]}
 
+@app.get("/api/db/persons/{person_id}")
+async def api_db_person_detail(person_id: int = Path(...), db: Optional[str] = Query(None)):
+    with _open_db(db) as conn:
+        cur = conn.execute("SELECT id, name, kana, birth_year, death_year, note FROM person WHERE id=?", (person_id,))
+        row = cur.fetchone()
+        return {"ok": True, "item": dict(row) if row else None}
+
 @app.get("/api/db/works")
 async def api_db_works(keyword: str = Query(..., description="作品名の部分一致キーワード"), db: Optional[str] = Query(None)):
     with _open_db(db) as conn:
@@ -192,6 +199,21 @@ async def api_db_work_cast(work_id: int = Path(...), db: Optional[str] = Query(N
             (work_id,),
         )
         return {"ok": True, "items": [dict(r) for r in cur.fetchall()]}
+
+@app.get("/api/db/works/{work_id}")
+async def api_db_work_detail(work_id: int = Path(...), db: Optional[str] = Query(None)):
+    with _open_db(db) as conn:
+        cur = conn.execute(
+            """
+            SELECT w.id, w.title, w.year, w.subtype, w.summary, c.name AS category
+            FROM work w
+            JOIN category c ON c.id = w.category_id
+            WHERE w.id=?
+            """,
+            (work_id,),
+        )
+        row = cur.fetchone()
+        return {"ok": True, "item": dict(row) if row else None}
 
 @app.get("/api/db/fts")
 async def api_db_fts(q: str = Query(..., description="FTS5 検索クエリ"), limit: int = Query(50, ge=1, le=200), db: Optional[str] = Query(None)):
