@@ -1,0 +1,65 @@
+{
+  "persons": [
+    { "name": "李相日" },
+    { "name": "吉田修一" },
+    { "name": "奥寺佐渡子" },
+    { "name": "原摩利彦" },
+    { "name": "井口理" },
+    { "name": "北田雅也" },
+    { "name": "吉沢亮" },
+    { "name": "横浜流星" },
+    { "name": "高畑充希" },
+    { "name": "寺島しのぶ" },
+    { "name": "森七菜" },
+    { "name": "三浦貴大" },
+    { "name": "見上愛" },
+    { "name": "黒川想矢" },
+    { "name": "越山敬達" },
+    { "name": "永瀬正敏" },
+    { "name": "嶋田久作" },
+    { "name": "宮澤エマ" },
+    { "name": "岩上敦宏" },
+    { "name": "伊藤伸彦" },
+    { "name": "荒木宏幸" }
+  ],
+  "works": [
+    {
+      "title": "国宝",
+      "category": "映画",
+      "year": 2025,
+      "subtype": null,
+      "summary": "李相日監督が「悪人」「怒り」に続いて吉田修一の小説を映画化。任侠の家に生まれながら、歌舞伎役者として芸の道に人生を捧げた男の激動の人生を描いた人間ドラマ。任侠の一門に生まれた喜久雄は15歳の時に抗争で父を亡くし…（以下略）"
+    }
+  ],
+  "credits": [
+    { "work": "国宝", "person": "李相日",   "role": "director",    "character": null },
+    { "work": "国宝", "person": "奥寺佐渡子", "role": "screenplay",  "character": null },
+    { "work": "国宝", "person": "吉田修一", "role": "author",      "character": null },
+    { "work": "国宝", "person": "原摩利彦", "role": "composer",    "character": null },
+
+    { "work": "国宝", "person": "吉沢亮",   "role": "actor", "character": null },
+    { "work": "国宝", "person": "横浜流星", "role": "actor", "character": null },
+    { "work": "国宝", "person": "高畑充希", "role": "actor", "character": null },
+    { "work": "国宝", "person": "寺島しのぶ", "role": "actor", "character": null },
+    { "work": "国宝", "person": "森七菜",   "role": "actor", "character": null },
+    { "work": "国宝", "person": "三浦貴大", "role": "actor", "character": null },
+    { "work": "国宝", "person": "見上愛",   "role": "actor", "character": null },
+    { "work": "国宝", "person": "黒川想矢", "role": "actor", "character": null },
+    { "work": "国宝", "person": "越山敬達", "role": "actor", "character": null },
+    { "work": "国宝", "person": "永瀬正敏", "role": "actor", "character": null },
+    { "work": "国宝", "person": "嶋田久作", "role": "actor", "character": null },
+    { "work": "国宝", "person": "宮澤エマ", "role": "actor", "character": null },
+
+    { "work": "国宝", "person": "井口理",   "role": "theme_song",  "character": null },
+    { "work": "国宝", "person": "北田雅也", "role": "sound_effects","character": null },
+    { "work": "国宝", "person": "岩上敦宏", "role": "producer",     "character": null },
+    { "work": "国宝", "person": "伊藤伸彦", "role": "producer",     "character": null },
+    { "work": "国宝", "person": "荒木宏幸", "role": "producer",     "character": null }
+  ],
+  "external_ids": [
+    { "entity": "work", "name": "国宝", "source": "eiga.com", "value": "101370", "url": "https://eiga.com/movie/101370/" }
+  ],
+  "unified": [],
+  "note": null,
+  "next_queries": []
+}

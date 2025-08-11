@@ -3,6 +3,7 @@ import json
 import re
 import asyncio
 import httpx
+import sqlite3
 from typing import Any, Dict, List, Optional, Callable
 from urllib.parse import urlparse
 
@@ -32,32 +33,51 @@ def ensure_dirs():
 
 def build_extractor_prompt(domain: str) -> str:
     template = """あなたは事実収集アシスタントです。以下の対象ドメインに限定し、確度の高い事実のみを抽出します。
-推測は避け、未確定情報は note に記載してください。
 対象ドメイン: {DOMAIN}
 
-出力規則:
-- 出力は JSON オブジェクト 1個のみ。前置き・後置き・Markdown・説明は禁止。
-- コードフェンス（```）やバッククォート、見出しや箇条書きなどのMarkdown記法は一切禁止。
-- もし情報が見つからない場合でも、空配列を持つJSONを返す（例: persons:[], works:[] ...）。
-- JSONは次のマーカーに必ず挟むこと。
-  <<<JSON_START>>>
-  {{ ... }}
-  <<<JSON_END>>>
- - 次ラウンドで使う検索語を next_queries に最大5件、配列で必ず出力すること（重複や既出語は避け、端的な日本語クエリ）。英語やローマ字は避け、日本語で書くこと。
+厳格な出力規則（絶対遵守）:
+- 出力は JSON オブジェクト 1個のみ。前置き・後置き・説明文・見出し・箇条書き・Markdown（``` 等）一切禁止。
+- 最初に必ず <<<JSON_START>>> を出力し、最後に <<<JSON_END>>> を出力。JSONはその間のみ。
+- 未確定情報は入れない。わからない項目は null または空配列。
+- 許可キーのみ使用: persons, works, credits, external_ids, unified, note, next_queries
+- credits.role は次のみ: actor, voice, director, author, screenplay, composer, theme_song, sound_effects, producer
+- 文字列は過剰な修飾語を避け、短く正確に。
+- next_queries は日本語の短い検索語を最大5件。重複不可。
 
 スキーマ:
 {{
   "persons": [ {{ "name": "", "aliases": [""] }} ],
   "works": [ {{ "title": "", "category": "映画", "year": 2024, "subtype": null, "summary": null }} ],
   "credits": [ {{ "work": "", "person": "", "role": "actor", "character": null }} ],
-  "external_ids": [ {{ "entity": "work", "name": "", "source": "wikipedia", "value": "", "url": null }} ],
+  "external_ids": [ {{ "entity": "work", "name": "", "source": "eiga.com", "value": "", "url": null }} ],
   "unified": [ {{ "name": "", "work": "", "relation": "adaptation" }} ],
   "note": null,
   "next_queries": [ "" ]
 }}
+
+出力テンプレート（例、構造イメージのみ）:
+<<<JSON_START>>>
+{{
+  "persons": [],
+  "works": [],
+  "credits": [],
+  "external_ids": [],
+  "unified": [],
+  "note": null,
+  "next_queries": []
+}}
+<<<JSON_END>>>
 """
-    # {DOMAIN} を埋め込み、テンプレートを返す
     return template.replace("{DOMAIN}", str(domain))
+
+def build_repair_prompt(domain: str) -> str:
+    return (
+        "以下の入力テキストを、指定スキーマに合致する有効なJSONに修復してください。\n"
+        "- 前置き・説明・Markdown禁止。<<<JSON_START>>> と <<<JSON_END>>> で囲み、JSONのみ出力。\n"
+        "- 許可キーのみ: persons, works, credits, external_ids, unified, note, next_queries\n"
+        "- credits.role は actor, voice, director, author, screenplay, composer, theme_song, sound_effects, producer のみ\n"
+        "- わからない値は null または空配列。対象ドメイン: " + str(domain)
+    )
 
 def extract_json(text: str) -> Optional[Dict[str, Any]]:
     def _try_parse_relaxed(src: str) -> Optional[Dict[str, Any]]:
@@ -525,6 +545,110 @@ def build_structured_credit_hints(hits: List[Dict[str, Any]]) -> str:
     return "\n".join(lines)
 
 
+def _select_main_eiga_url(hits: List[Dict[str, Any]]) -> Optional[str]:
+    for h in hits:
+        url = (h.get("url") or h.get("href") or "").strip()
+        if not url:
+            continue
+        pr = urlparse(url)
+        if pr.netloc.lower() == "eiga.com" and re.match(r"^/movie/\d+/?$", pr.path):
+            return url
+    return None
+
+
+def _parse_eiga_movie_id(url: str) -> Optional[str]:
+    try:
+        pr = urlparse(url)
+        m = re.match(r"^/movie/(\d+)/?$", pr.path)
+        return m.group(1) if m else None
+    except Exception:
+        return None
+
+
+async def build_deep_payload(hits: List[Dict[str, Any]]) -> Dict[str, Any]:
+    payload: Dict[str, Any] = {
+        "persons": [],
+        "works": [],
+        "credits": [],
+        "external_ids": [],
+        "unified": [],
+        "note": None,
+        "next_queries": [],
+    }
+    main_url = _select_main_eiga_url(hits)
+    if not main_url:
+        return payload
+    try:
+        html = await _fetch_text(main_url)
+        data = deep_extract_from_page(main_url, html)
+        title = (data.get("title") or (data.get("work") or [None])[0] or "").strip()
+        if not title:
+            return payload
+        # Work
+        yrs = list(data.get("year") or [])
+        year_int: Optional[int] = None
+        for y in yrs:
+            try:
+                yi = int(str(y)[:4])
+                if 1800 <= yi <= 2100:
+                    year_int = yi
+                    break
+            except Exception:
+                continue
+        synopsis = (data.get("synopsis") or "").strip() or None
+        payload["works"].append({
+            "title": title,
+            "category": "映画",
+            "year": year_int,
+            "subtype": None,
+            "summary": synopsis,
+        })
+        # Persons and credits
+        role_map = {
+            "director": "director",
+            "screenplay": "screenplay",
+            "author": "author",
+            "composer": "composer",
+            "theme_song": "theme_song",
+            "sound_effects": "sound_effects",
+            "producer": "producer",
+            "actor": "actor",
+            "voice": "voice",
+        }
+        added_persons: set[str] = set()
+        def _add_person(name: str) -> None:
+            n = name.strip()
+            if not n or n in added_persons:
+                return
+            payload["persons"].append({"name": n})
+            added_persons.add(n)
+        for key, role in role_map.items():
+            for nm in (data.get(key) or []):
+                n = str(nm).strip()
+                if not n:
+                    continue
+                _add_person(n)
+                payload["credits"].append({
+                    "work": title,
+                    "person": n,
+                    "role": role,
+                    "character": None,
+                })
+        # external_id (eiga.com id)
+        mid = _parse_eiga_movie_id(main_url)
+        if mid:
+            payload["external_ids"].append({
+                "entity": "work",
+                "name": title,
+                "source": "eiga.com",
+                "value": mid,
+                "url": main_url,
+            })
+    except Exception:
+        return payload
+    return payload
+
+
 def _merge_list_unique(items: List[Dict[str, Any]], keys: List[str]) -> List[Dict[str, Any]]:
     seen = set()
     out: List[Dict[str, Any]] = []
@@ -585,6 +709,9 @@ def _normalize_extracted_payload(data: Dict[str, Any]) -> Dict[str, Any]:
             break
     normalized["next_queries"] = nq
     return normalized
+
+def _is_effectively_empty_payload(data: Dict[str, Any]) -> bool:
+    return not any(len(data.get(k) or []) for k in ["persons", "works", "credits", "external_ids", "unified"]) 
 
 
 async def run_ingest_mode(
@@ -759,9 +886,32 @@ async def run_ingest_mode(
                 data = extract_json(resp)
                 if isinstance(data, dict):
                     data = _normalize_extracted_payload(data)
+                    # JSONだが中身が空の場合は修復/補完を試みる
+                    if _is_effectively_empty_payload(data):
+                        try:
+                            repair_prompt = build_repair_prompt(domain)
+                            rep = await asyncio.wait_for(llm.ainvoke(repair_prompt, resp), timeout=45.0)
+                            fixed = extract_json(rep)
+                            if isinstance(fixed, dict):
+                                fixed = _normalize_extracted_payload(fixed)
+                                if not _is_effectively_empty_payload(fixed):
+                                    data = fixed
+                                    _log("Repaired JSON payload")
+                        except Exception:
+                            pass
                     collected.append(data)
                     write_operation_log(operation_log_filename, "INFO", "IngestMode", f"Collected payload from {name} (round {r+1}).")
                     _log(f"Collected JSON from {name}")
+                    # 依然として空なら deep フォールバックを追加で補完
+                    if _is_effectively_empty_payload(data):
+                        try:
+                            fallback_payload = await build_deep_payload(hits)
+                            if any(fallback_payload.get(k) for k in ("persons","works","credits","external_ids")):
+                                collected.append(fallback_payload)
+                                write_operation_log(operation_log_filename, "INFO", "IngestMode", f"Collected payload (fallback-deep) (round {r+1}).")
+                                _log("Collected fallback payload (deep)")
+                        except Exception:
+                            pass
                     if expand:
                         # LLMが提案した next_queries を優先採用
                         for q in (data.get("next_queries") or []):
@@ -819,6 +969,15 @@ async def run_ingest_mode(
                                     f.write(str(resp2))
                             except Exception:
                                 pass
+                            # Fallback: Deep抽出から自動ペイロード生成
+                            try:
+                                fallback_payload = await build_deep_payload(hits)
+                                if any(fallback_payload.get(k) for k in ("persons","works","credits","external_ids")):
+                                    collected.append(fallback_payload)
+                                    write_operation_log(operation_log_filename, "INFO", "IngestMode", f"Collected payload (fallback-deep) (round {r+1}).")
+                                    _log("Collected fallback payload (deep)")
+                            except Exception:
+                                pass
                             preview = str(resp2 or "").replace("\n", " ")[:200]
                             if preview:
                                 _log(f"Preview: {preview}")
@@ -831,6 +990,15 @@ async def run_ingest_mode(
                             os.makedirs(os.path.dirname(raw_path), exist_ok=True)
                             with open(raw_path, "w", encoding="utf-8") as f:
                                 f.write(str(resp))
+                        except Exception:
+                            pass
+                        # Fallback: Deep抽出から自動ペイロード生成
+                        try:
+                            fallback_payload = await build_deep_payload(hits)
+                            if any(fallback_payload.get(k) for k in ("persons","works","credits","external_ids")):
+                                collected.append(fallback_payload)
+                                write_operation_log(operation_log_filename, "INFO", "IngestMode", f"Collected payload (fallback-deep) (round {r+1}).")
+                                _log("Collected fallback payload (deep)")
                         except Exception:
                             pass
                         preview = str(resp or "").replace("\n", " ")[:200]
@@ -852,6 +1020,133 @@ async def run_ingest_mode(
             ingest_payload(os.path.abspath(db_path), merged)
             write_operation_log(operation_log_filename, "INFO", "IngestMode", f"Registered to DB: {db_path}")
             _log("Registered to DB")
+            # 追加要素のサマリをログ出力
+            try:
+                persons = merged.get("persons") or []
+                works = merged.get("works") or []
+                credits = merged.get("credits") or []
+                external_ids = merged.get("external_ids") or []
+                unified = merged.get("unified") or []
+                _log(
+                    "DB added summary: "
+                    f"persons={len(persons)}, works={len(works)}, credits={len(credits)}, "
+                    f"external_ids={len(external_ids)}, unified={len(unified)}"
+                )
+                if persons:
+                    _log("Added persons:")
+                    for p in persons[:10]:
+                        _log(f"- {str(p.get('name') or '').strip()}")
+                    if len(persons) > 10:
+                        _log(f"... and {len(persons)-10} more persons")
+                if works:
+                    _log("Added works:")
+                    for w in works[:10]:
+                        ttl = str(w.get('title') or '').strip()
+                        yr = w.get('year')
+                        cat = str(w.get('category') or '').strip()
+                        extra = []
+                        if cat:
+                            extra.append(cat)
+                        if yr:
+                            extra.append(str(yr))
+                        suffix = f" ({', '.join(extra)})" if extra else ""
+                        _log(f"- {ttl}{suffix}")
+                    if len(works) > 10:
+                        _log(f"... and {len(works)-10} more works")
+                if credits:
+                    _log("Added credits:")
+                    for c in credits[:10]:
+                        wk = str(c.get('work') or '').strip()
+                        ps = str(c.get('person') or '').strip()
+                        rl = str(c.get('role') or '').strip()
+                        ch = str(c.get('character') or '').strip()
+                        chs = f" as {ch}" if ch else ""
+                        _log(f"- {wk} : {ps} [{rl}]{chs}")
+                    if len(credits) > 10:
+                        _log(f"... and {len(credits)-10} more credits")
+                if external_ids:
+                    _log("Added external_ids:")
+                    for e in external_ids[:10]:
+                        ent = str(e.get('entity') or '').strip()
+                        nm = str(e.get('name') or '').strip()
+                        src = str(e.get('source') or '').strip()
+                        val = str(e.get('value') or '').strip()
+                        _log(f"- {ent}:{nm} {src}={val}")
+                    if len(external_ids) > 10:
+                        _log(f"... and {len(external_ids)-10} more external_ids")
+
+                # 追加の詳細（作品ごと役割別・ID付き）
+                try:
+                    # DBからIDを引く
+                    db_abs = os.path.abspath(db_path)
+                    conn = sqlite3.connect(db_abs)
+                    conn.row_factory = sqlite3.Row
+                    with conn:
+                        # 作品ごとの詳細
+                        role_order = [
+                            "director", "screenplay", "author", "composer",
+                            "theme_song", "sound_effects", "producer"
+                        ]
+                        for w in works:
+                            title = (w.get("title") or "").strip()
+                            if not title:
+                                continue
+                            cur = conn.execute("SELECT id, year FROM work WHERE title=? ORDER BY id DESC LIMIT 1", (title,))
+                            row_w = cur.fetchone()
+                            wid = row_w["id"] if row_w else None
+                            yr_db = row_w["year"] if row_w else None
+                            cat = (w.get("category") or "").strip()
+                            yr = w.get("year") or yr_db
+                            _log(f"Work detail: {title} [id:{wid if wid is not None else '-'}]{' ('+cat+')' if cat else ''}{' ('+str(yr)+')' if yr else ''}")
+                            if w.get("summary"):
+                                summ = str(w.get("summary") or "")
+                                _log("  Summary: " + (summ[:300] + ("..." if len(summ) > 300 else "")))
+                            # 役割別
+                            cs = [c for c in credits if (c.get("work") or "").strip() == title]
+                            # スタッフ系
+                            for rname in role_order:
+                                names = []
+                                for c in cs:
+                                    if str(c.get("role") or "").strip() == rname:
+                                        nm = (c.get("person") or "").strip()
+                                        if nm and nm not in names:
+                                            names.append(nm)
+                                if names:
+                                    _log(f"  {rname}: " + ", ".join(names))
+                            # キャスト
+                            cast_lines = []
+                            for c in cs:
+                                role = str(c.get("role") or "").strip()
+                                if role in ("actor", "voice"):
+                                    nm = (c.get("person") or "").strip()
+                                    ch = (c.get("character") or "").strip()
+                                    cast_lines.append(f"- {nm} [{role}]" + (f" as {ch}" if ch else ""))
+                            if cast_lines:
+                                _log("  cast:")
+                                for ln in cast_lines[:30]:
+                                    _log("    " + ln)
+                            # 外部ID
+                            for e in external_ids:
+                                if (e.get("entity") == "work") and ((e.get("name") or "").strip() == title):
+                                    src = (e.get("source") or "").strip()
+                                    val = (e.get("value") or "").strip()
+                                    url = (e.get("url") or "").strip()
+                                    _log(f"  external_id: {src}={val} {url}")
+                        # 人物IDリスト
+                        if persons:
+                            _log("Persons with IDs:")
+                            for p in persons[:50]:
+                                nm = (p.get("name") or "").strip()
+                                if not nm:
+                                    continue
+                                cur = conn.execute("SELECT id FROM person WHERE name=? ORDER BY id DESC LIMIT 1", (nm,))
+                                row_p = cur.fetchone()
+                                pid = row_p["id"] if row_p else None
+                                _log(f"- {nm} [id:{pid if pid is not None else '-'}]")
+                except Exception:
+                    pass
+            except Exception:
+                pass
         except Exception as e:
             write_operation_log(operation_log_filename, "ERROR", "IngestMode", f"Failed to register DB: {e}")
             _log(f"Failed to register DB: {e}")
