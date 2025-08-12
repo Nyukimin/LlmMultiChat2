@@ -28,6 +28,8 @@
         <div class="actions">
           <button id="search">検索</button>
           <button id="clear">クリア</button>
+          <button id="cleanup">重複クリーンアップ</button>
+          <span id="cleanup-status" style="margin-left:8px;color:#888;font-size:0.9em;"></span>
         </div>
       </div>
     </section>
@@ -40,6 +42,10 @@
         </div>
         <div style="flex:1; min-width:320px;">
           <div id="detail" class="log"></div>
+          <div style="margin-top:8px;">
+            <label><input type="checkbox" id="cleanup-dryrun" checked> Dry-run</label>
+            <label style="margin-left:8px;"><input type="checkbox" id="cleanup-vacuum"> VACUUM</label>
+          </div>
         </div>
       </div>
     </section>

@@ -3,6 +3,7 @@ import traceback
 import os
 import sys
 import sqlite3
+import importlib
 from typing import List, Optional
 from fastapi import FastAPI, WebSocket, Body, Query, Path
 from fastapi.middleware.cors import CORSMiddleware
@@ -54,6 +55,15 @@ def _resolve_kb_db_path() -> str:
     except Exception:
         # フォールバック: 既定の KB/media.db（絶対化）
         return os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'KB', 'media.db'))
+
+# KBユーティリティの動的ロード（パッケージ化されていないKB直下から）
+_kb_dir = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'KB'))
+if _kb_dir not in sys.path:
+    sys.path.append(_kb_dir)
+try:
+    from cleanup_dedup import run_cleanup  # type: ignore
+except Exception:
+    run_cleanup = None  # type: ignore
 
 @app.on_event("startup")
 async def startup_event():
@@ -189,6 +199,30 @@ async def api_kb_init(payload: dict = Body(...)):
             conn.executescript(schema_sql)
             conn.commit()
         return {"ok": True, "db_path": db}
+    except Exception as e:
+        return {"ok": False, "error": str(e), "db_path": db}
+
+@app.post("/api/kb/cleanup")
+async def api_kb_cleanup(payload: dict = Body(...)):
+    """一括クリーンアップ（特殊機能）。既存DBに対して重複排除/統合/FTS再構築を実行。
+    body: { dry_run: bool, vacuum: bool, db?: str }
+    """
+    db = str(payload.get("db") or _resolve_kb_db_path())
+    dry_run = bool(payload.get("dry_run", True))
+    vacuum = bool(payload.get("vacuum", False))
+    if run_cleanup is None:
+        return {"ok": False, "error": "cleanup module not available", "db_path": db}
+    try:
+        res = run_cleanup(db, dry_run=dry_run, vacuum=vacuum)
+        # 正規化して返却
+        return {
+            "ok": bool(res.get("ok", True)),
+            "db_path": db,
+            "backup_path": res.get("backup_path"),
+            "stats": res.get("stats"),
+            "logs": res.get("logs", []),
+            "error": res.get("error"),
+        }
     except Exception as e:
         return {"ok": False, "error": str(e), "db_path": db}
 
