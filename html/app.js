@@ -14,6 +14,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const chatForm = document.getElementById('chat-form');
     const userInput = document.getElementById('user-input');
     const sendButton = document.getElementById('send-button');
+    const infoSearchToggle = document.getElementById('info-search-toggle');
     // Ingest UIは独立サブセットへ切り出し。メインUIでは扱わない
     // statusElementsは初期化時に動的に構築する
     let statusElements = {};
@@ -76,6 +77,11 @@ document.addEventListener('DOMContentLoaded', () => {
             addMessage('USER', userMessage);
             // WebSocket経由でサーバーにメッセージを送信
             try {
+                // 先に現在の検索モード状態を送信してサーバ側フラグを更新
+                try {
+                    const on = !!infoSearchToggle?.checked;
+                    ws.send(`/kbauto ${on ? 'on' : 'off'}`);
+                } catch (e) {}
                 ws.send(userMessage);
                 appLog('info', 'Message sent successfully:', userMessage);
             } catch (error) {
@@ -83,6 +89,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 addSystemMessage("メッセージの送信に失敗しました。接続を確認してください。");
             }
             userInput.value = '';
+            // 送信後は不要
         } else {
             appLog('warn', 'Message not sent. Either empty message or WebSocket not open.', 'Message:', userMessage, 'WebSocket state:', ws.readyState);
             if (!userMessage) {
@@ -136,6 +143,16 @@ document.addEventListener('DOMContentLoaded', () => {
         };
         tabChat.addEventListener('click', () => activateTab('chat'));
         tabLogs.addEventListener('click', () => activateTab('logs'));
+        // 情報検索モードの保存/復元
+        try {
+            const saved = localStorage.getItem('infoSearchMode');
+            if (saved !== null && infoSearchToggle) {
+                infoSearchToggle.checked = saved === '1';
+            }
+            infoSearchToggle?.addEventListener('change', () => {
+                localStorage.setItem('infoSearchMode', infoSearchToggle.checked ? '1' : '0');
+            });
+        } catch (e) {}
         appLog('info', 'Submit event listener added to chatForm.');
         appLog('info', 'Function init finished.');
     };

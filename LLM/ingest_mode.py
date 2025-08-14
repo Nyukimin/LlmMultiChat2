@@ -1,4 +1,5 @@
 import os
+from datetime import datetime
 import json
 import re
 import asyncio
@@ -29,6 +30,7 @@ except Exception:
 def ensure_dirs():
     os.makedirs(os.path.join(BASE_DIR, "logs"), exist_ok=True)
     os.makedirs(os.path.join(BASE_DIR, "..", "logs"), exist_ok=True)
+    os.makedirs(os.path.join(BASE_DIR, "..", "logs", "person"), exist_ok=True)
 
 
 def build_extractor_prompt(domain: str) -> str:
@@ -187,6 +189,63 @@ ROLE_KEYWORDS = {
     "音楽": "composer",
 }
 
+# 役割語プリフィックス（先頭に付いていたら除去/除外対象）
+ROLE_PREFIXES = [
+    "出演", "主演", "監督", "脚本", "原作", "音楽", "声優", "主題歌", "音響効果", "プロデューサー",
+]
+
+# ステータス系プリフィックス（作品名の前に付く見出し語）
+STATUS_PREFIXES = [
+    "上映中", "配信中",
+]
+
+def _remove_role_prefix(text: str) -> str:
+    s = str(text or "").strip()
+    if not s:
+        return s
+    for pref in ROLE_PREFIXES:
+        # パターン: 先頭が 役割語 [：:・\s] のいずれかで続く
+        if re.match(rf"^{re.escape(pref)}[：:・\s]", s):
+            s = re.sub(rf"^{re.escape(pref)}[：:・\s]+", "", s, count=1).strip()
+            break
+        # 役割語のみ
+        if s == pref:
+            return ""
+    return s
+
+def _is_pure_role_word(text: str) -> bool:
+    t = str(text or "").strip()
+    return t in ROLE_PREFIXES
+
+def _remove_status_prefix(text: str) -> str:
+    s = str(text or "").strip()
+    if not s:
+        return s
+    changed = True
+    while changed:
+        changed = False
+        for pref in STATUS_PREFIXES:
+            if re.match(rf"^{re.escape(pref)}[：:・\s]", s):
+                s = re.sub(rf"^{re.escape(pref)}[：:・\s]+", "", s, count=1).strip()
+                changed = True
+    return s
+
+def _clean_title_token(text: str) -> str:
+    # ステータス → 役割 の順に除去
+    s = _remove_status_prefix(text)
+    s = _remove_role_prefix(s)
+    return s.strip()
+
+def _dedupe_preserve_order(items: List[str]) -> List[str]:
+    seen = set()
+    out: List[str] = []
+    for it in items or []:
+        if it in seen:
+            continue
+        seen.add(it)
+        out.append(it)
+    return out
+
 def extract_candidates_from_text(title: str, snippet: str) -> Dict[str, List[str]]:
     """ヒットのタイトル/スニペットから簡易に候補を抽出。
     - 作品候補: 「」「」/『』内の文字列
@@ -313,6 +372,25 @@ def build_structured_hints(hits: List[Dict[str, Any]]) -> str:
     return "\n".join(lines)
 
 
+def _clean_title_token(token: str) -> str:
+    s = str(token or "").strip()
+    # 役割語/状態ラベル（上映中/配信中/出演 等）を先頭から削除
+    s = re.sub(r"^(上映中|配信中)\s+", "", s)
+    s = _remove_role_prefix(s)
+    # 余計な空白の正規化
+    s = re.sub(r"\s+", " ", s).strip()
+    return s
+
+def _dedupe_preserve_order(items: List[str]) -> List[str]:
+    seen = set()
+    out: List[str] = []
+    for it in items:
+        if it in seen:
+            continue
+        seen.add(it)
+        out.append(it)
+    return out
+
 def _strip_html(html: str) -> str:
     s = html
     # 取り回し簡易のため、ごく簡単にタグ除去
@@ -326,12 +404,100 @@ def _strip_html(html: str) -> str:
     return s.strip()
 
 
+def _jp_text_score(s: str) -> int:
+    """日本語テキストらしさの簡易スコア。ひらがな/カタカナ/漢字の数を加点。"""
+    score = 0
+    for ch in s or "":
+        o = ord(ch)
+        if (0x3040 <= o <= 0x309F) or (0x30A0 <= o <= 0x30FF) or (0x4E00 <= o <= 0x9FFF):
+            score += 1
+    return score
+
+
+def _extract_long_paragraph_from_html(html: str) -> Optional[str]:
+    """<p>～</p> から本文っぽい長文段落を抽出（日本語スコアと長さで選択）。"""
+    try:
+        paras = re.findall(r"<p[^>]*>([\s\S]*?)</p>", html, re.IGNORECASE)
+        best: Optional[str] = None
+        best_score = -1
+        for inner in paras:
+            txt = _strip_html(inner)
+            if len(txt) < 60 or "。" not in txt:
+                continue
+            score = _jp_text_score(txt) + len(txt) // 10
+            if score > best_score:
+                best_score = score
+                best = txt.strip()
+        return best
+    except Exception:
+        return None
+
+
+def _extract_bio_from_text(text: str) -> Optional[str]:
+    """句点で区切って、年表/作品名が並ぶ略歴らしい文を組み立てる。
+    条件: 全体長>=120, 年/括弧年表(（11）等)が2箇所以上含まれる。
+    """
+    try:
+        s = (text or "").strip()
+        # 連続空白を圧縮
+        s = re.sub(r"\s+", " ", s)
+        # 文に分割（句点保持）
+        parts = re.split(r"(。)", s)
+        # parts は [文, '。', 文, '。', ...]
+        sentences: List[str] = []
+        i = 0
+        while i < len(parts):
+            seg = parts[i].strip()
+            if i + 1 < len(parts) and parts[i+1] == "。":
+                seg = (seg + "。").strip()
+                i += 2
+            else:
+                i += 1
+            if seg:
+                sentences.append(seg)
+        # 先頭から順に、年パターンを十分含む塊を見つける
+        buf: List[str] = []
+        count_year = 0
+        for sent in sentences[:40]:  # 上位40文以内で探す
+            buf.append(sent)
+            # 年: 19xx/20xx または （11）等の括弧年
+            count_year += len(re.findall(r"(?:19|20)\d{2}", sent))
+            count_year += len(re.findall(r"（\d{2}）", sent))
+            joined = "".join(buf)
+            if len(joined) >= 120 and count_year >= 2:
+                return joined[:1200].strip()
+        # 見つからなければ先頭から長めの文を返す
+        joined = "".join(sentences[:8])
+        return joined[:400].strip() if joined else None
+    except Exception:
+        return None
+
+
+def _jp_text_score(s: str) -> int:
+    """日本語のひらがな/カタカナ/漢字の出現数でスコアリング。高いほど日本語として妥当。"""
+    score = 0
+    for ch in s:
+        o = ord(ch)
+        if (0x3040 <= o <= 0x309F) or (0x30A0 <= o <= 0x30FF) or (0x4E00 <= o <= 0x9FFF):
+            score += 1
+    return score
+
+
 async def _fetch_text(url: str) -> str:
     headers = {"User-Agent": "Mozilla/5.0 (IngestBot/1.0)"}
     async with httpx.AsyncClient(follow_redirects=True, timeout=FETCH_TIMEOUT_SEC, headers=headers) as client:
         r = await client.get(url)
         r.raise_for_status()
-        content = r.text
+        # eiga.com は UTF-8 固定でデコード（誤判定時の文字化けを防止）
+        try:
+            host = urlparse(url).netloc.lower()
+        except Exception:
+            host = ""
+        if "eiga.com" in host:
+            content = r.content.decode("utf-8", errors="ignore")
+        else:
+            # httpx の推定に委ねる
+            content = r.text
         if len(content) > FETCH_BYTES_LIMIT:
             content = content[:FETCH_BYTES_LIMIT]
         return content
@@ -475,6 +641,16 @@ def deep_extract_from_page(url: str, html: str) -> Dict[str, Any]:
                 result["synopsis"] = d
     except Exception:
         pass
+    # personリンクを cast_pairs として収集（/person/NNNN/ の aタグテキスト）
+    try:
+        for a, href in re.findall(r"<a[^>]*href=\"(/person/\d+/)\"[^>]*>([\s\S]*?)</a>", html, re.IGNORECASE):
+            name = sanitize_query(_strip_html(href))
+            if name and len(name) <= 40:
+                pid = _parse_eiga_person_id(a)
+                if pid:
+                    result.setdefault("cast_pairs", []).append({"name": name, "person_id": pid})
+    except Exception:
+        pass
     return result
 
 
@@ -557,7 +733,7 @@ def _select_main_eiga_url(hits: List[Dict[str, Any]]) -> Optional[str]:
 
 
 def _select_person_base_url(hits: List[Dict[str, Any]]) -> Optional[str]:
-    """eiga.com/person/<id>/ のベースURLを返す。movie/ などの下位ページはベースに揃える。"""
+    """eiga.com/person/<id>/ のベースURLを返す。movie/ 等の下位ページでもIDを拾い、ベースに正規化する。"""
     for h in hits:
         url = (h.get("url") or h.get("href") or "").strip()
         if not url:
@@ -565,11 +741,221 @@ def _select_person_base_url(hits: List[Dict[str, Any]]) -> Optional[str]:
         pr = urlparse(url)
         if pr.netloc.lower() != "eiga.com":
             continue
-        m = re.match(r"^/person/(\d+)/?", pr.path)
+        # /person/<id>/, /person/<id>, /person/<id>/movie/... いずれも許容
+        m = re.match(r"^/person/(\d+)(?:/|$)", pr.path)
         if m:
             pid = m.group(1)
             return f"https://eiga.com/person/{pid}/"
     return None
+
+
+async def _search_eiga_person_url(query: str, log: Optional[Callable[[str], None]] = None) -> Optional[str]:
+    """eiga.com のサイト内検索を直接叩き、/person/<id>/ を一件返すフォールバック。"""
+    try:
+        q = sanitize_query(query)
+        if not q:
+            return None
+        variants = [
+            f"https://eiga.com/search/?q={q}",
+            f"https://eiga.com/search/?s=person&k={q}",
+            f"https://eiga.com/search/?s=1&k={q}",
+        ]
+        for url in variants:
+            if log:
+                log(f"Person direct search (eiga.com): {url}")
+            html = await _fetch_text(url)
+            # 最初に出現する /person/<id>/ を採用
+            m = re.search(r"href=\"(/person/(\d+)/?)\"", html)
+            if m:
+                pid = m.group(2)
+                pb = f"https://eiga.com/person/{pid}/"
+                if log:
+                    log(f"Person direct resolved: {pb}")
+                return pb
+    except Exception as e:
+        if log:
+            log(f"Person direct search failed: {e}")
+    return None
+
+
+async def perform_web_search_and_hints(current_query: str, domain: str) -> tuple[
+    List[Dict[str, Any]],  # hits (effective later)
+    List[Dict[str, Any]],  # merged_hits
+    List[Dict[str, Any]],  # main_eiga_hits (movie pages)
+    str,  # hints_list
+    str,  # structured
+    str,  # structured_credits
+    str,  # deep
+    str,  # raw_dump_path (file path where raw search results were saved)
+]:
+    """DuckDuckGo検索→ヒント生成を行う（ログ出力はしない）。"""
+    # 検索計画
+    search_plan: List[str] = []
+    dom = str(domain or "")
+    if "映画" in dom:
+        search_plan = [
+            f"{current_query} site:eiga.com/person",
+            f"{current_query} site:eiga.com",
+            f"{current_query} 映画.com",
+            f"{current_query} 映画com",
+            f"{current_query} site:movies.yahoo.co.jp",
+            f"{current_query} site:.jp",
+        ]
+    else:
+        search_plan = [f"{current_query} site:.jp"]
+
+    allowed_hosts = {"movies.yahoo.co.jp", "eiga.com"}
+    deny_hosts = {"youtube.com", "www.youtube.com", "tiktok.com", "www.tiktok.com", "jp.mercari.com"}
+
+    merged_hits: List[Dict[str, Any]] = []
+    per_query_results: List[Dict[str, Any]] = []
+    seen_urls = set()
+    for q in search_plan:
+        if len(merged_hits) >= MAX_HITS_TOTAL:
+            break
+        partial = search_text(q, region="jp-jp", max_results=MAX_RESULTS_PER_QUERY, safesearch="moderate")
+        # クエリごとの生結果を保持（search_textの戻り値を「そのまま」保存）
+        try:
+            per_query_results.append({
+                "plan_query": q,
+                "results": partial,
+            })
+        except Exception:
+            pass
+        for h in partial:
+            url = (h.get("url") or h.get("href") or "").strip()
+            if not url:
+                continue
+            if url in seen_urls:
+                continue
+            host = urlparse(url).netloc.lower()
+            if host in deny_hosts:
+                continue
+            if "映画" in dom:
+                if host in allowed_hosts:
+                    seen_urls.add(url)
+                    merged_hits.append(h)
+                else:
+                    if q.endswith("site:.jp") and host.endswith(".jp"):
+                        seen_urls.add(url)
+                        merged_hits.append(h)
+            else:
+                seen_urls.add(url)
+                merged_hits.append(h)
+            if len(merged_hits) >= MAX_HITS_TOTAL:
+                break
+
+    # 収集段では narrow せず、統合ヒットをそのまま使う
+    main_eiga_hits: List[Dict[str, Any]] = []
+    hits = merged_hits
+    # ヒント構築
+    hints_list = "\n".join([f"- {h.get('title')} :: {h.get('url') or h.get('href')} :: {h.get('snippet')}" for h in hits])
+    structured = build_structured_hints(hits)
+    structured_credits = build_structured_credit_hints(hits)
+    deep = await build_deep_hints(hits)
+
+    # 生検索結果をファイルに保存（logs/search）
+    raw_dump_path = ""
+    try:
+        root_logs = os.path.abspath(os.path.join(BASE_DIR, "..", "logs"))
+        target_dir = os.path.join(root_logs, "search")
+        os.makedirs(target_dir, exist_ok=True)
+        ts = datetime.now().strftime("%Y%m%d-%H%M%S")
+        qsafe = sanitize_query(current_query)[:50].replace(" ", "_")
+        fname = f"search_{ts}_{qsafe or 'query'}.json"
+        raw_dump_path = os.path.join(target_dir, fname)
+        payload_dump = {
+            "topic": current_query,
+            "domain": domain,
+            "timestamp": ts,
+            "search_plan": search_plan,
+            "per_query_results": per_query_results,  # ddgs結果をそのまま
+            "merged_hits": merged_hits,
+        }
+        with open(raw_dump_path, "w", encoding="utf-8") as f:
+            json.dump(payload_dump, f, ensure_ascii=False, indent=2)
+    except Exception:
+        raw_dump_path = ""
+
+    return hits, merged_hits, main_eiga_hits, hints_list, structured, structured_credits, deep, raw_dump_path
+
+
+async def resolve_person_base_url_from_hits(current_query: str, merged_hits: List[Dict[str, Any]], logf: Callable[[str], None]) -> Optional[str]:
+    """merged_hits やフォールバック検索/直検索から人物ベースURLを決定する。"""
+    person_base_url: Optional[str] = _select_person_base_url(merged_hits)
+    if person_base_url:
+        return person_base_url
+    # フォールバック検索（DDG）
+    fb_queries = [
+        f"{current_query} site:eiga.com/person",
+        f'"{current_query}" site:eiga.com/person',
+    ]
+    fallback_hits: List[Dict[str, Any]] = []
+    for fbq in fb_queries:
+        try:
+            logf(f"Person fallback search: {fbq}")
+            partial = search_text(fbq, region="jp-jp", max_results=12, safesearch="moderate")
+        except Exception:
+            partial = []
+        if partial:
+            logf("Person fallback hints begin")
+            for h in partial:
+                logf(f"- {h.get('title')} :: {h.get('url') or h.get('href')} :: {h.get('snippet')}")
+            logf("Person fallback hints end")
+        for h in partial:
+            url = (h.get("url") or h.get("href") or "").strip()
+            if not url:
+                continue
+            host = urlparse(url).netloc.lower()
+            if host != "eiga.com":
+                continue
+            fallback_hits.append(h)
+    if fallback_hits:
+        pb = _select_person_base_url(fallback_hits)
+        if pb:
+            logf(f"Person base resolved: {pb}")
+            return pb
+    # 直検索（サイト内検索）
+    try:
+        pb2 = await _search_eiga_person_url(current_query, logf)
+    except Exception:
+        pb2 = None
+    return pb2
+
+
+def log_hints_and_build_block(logf: Callable[[str], None], hints_list: str, structured: str, structured_credits: str, deep: str, hits: List[Dict[str, Any]]) -> str:
+    hint_block = ""
+    if hints_list:
+        hint_block += f"\n\n## 参考ヒント(検索結果)\n{hints_list}\n"
+    if structured:
+        hint_block += f"\n## 抽出候補(自動)\n{structured}\n"
+    if structured_credits:
+        hint_block += f"\n## クレジット候補(自動)\n{structured_credits}\n"
+    if deep:
+        hint_block += f"\n## 詳細抽出(サイト精読)\n{deep}\n"
+    # ログ出力
+    if hints_list:
+        logf("Hints dump begin")
+        for ln in hints_list.splitlines():
+            logf(ln)
+        logf("Hints dump end")
+    if structured:
+        logf("Candidates dump begin")
+        for ln in structured.splitlines():
+            logf(ln)
+        logf("Candidates dump end")
+    if structured_credits:
+        logf("Credit candidates dump begin")
+        for ln in structured_credits.splitlines():
+            logf(ln)
+        logf("Credit candidates dump end")
+    if deep:
+        logf("Deep candidates dump begin")
+        for ln in deep.splitlines():
+            logf(ln)
+        logf("Deep candidates dump end")
+    logf(f"Hints: {len(hits) if hints_list else 0} items")
+    return hint_block
 
 
 def _person_movie_page_urls(person_base_url: str, max_pages: int = 20) -> List[str]:
@@ -590,6 +976,20 @@ def _extract_movie_titles_from_person_movie_html(html: str) -> List[str]:
         if text and text not in titles:
             titles.append(text)
     return titles
+
+
+def _extract_movie_entries_from_person_movie_html(html: str) -> List[Dict[str, Any]]:
+    """人物の映画一覧HTMLから (title, movie_id) のエントリを抽出する。"""
+    entries: List[Dict[str, Any]] = []
+    seen = set()
+    for href, mid, inner in re.findall(r"<a[^>]+href=\"(/movie/(\d+)/)\"[^>]*>([\s\S]*?)</a>", html, re.IGNORECASE):
+        movie_id = mid
+        title = sanitize_query(_strip_html(inner))
+        key = (title, movie_id)
+        if title and key not in seen:
+            seen.add(key)
+            entries.append({"title": title, "movie_id": movie_id})
+    return entries
 
 
 async def _fetch_person_all_movies(person_base_url: str) -> tuple[List[str], int]:
@@ -615,34 +1015,188 @@ async def _fetch_person_all_movies(person_base_url: str) -> tuple[List[str], int
     return titles, pages
 
 
+async def _fetch_person_all_movie_entries(person_base_url: str) -> tuple[List[Dict[str, Any]], int]:
+    entries: List[Dict[str, Any]] = []
+    seen = set()
+    pages = 0
+    for url in _person_movie_page_urls(person_base_url):
+        try:
+            html = await _fetch_text(url)
+        except Exception:
+            break
+        page_entries = _extract_movie_entries_from_person_movie_html(html)
+        pages += 1
+        new_any = False
+        for e in page_entries:
+            title = e.get("title")
+            mid = e.get("movie_id")
+            key = (title, mid)
+            if title and key not in seen:
+                seen.add(key)
+                entries.append({"title": title, "movie_id": mid})
+                new_any = True
+        if not new_any:
+            break
+    return entries, pages
+
+
+def _person_drama_page_urls(person_base_url: str, max_pages: int = 20) -> List[str]:
+    """person/<id>/drama/ のページURL群を生成。"""
+    urls = [person_base_url.rstrip('/') + '/drama/']
+    for p in range(2, max_pages + 1):
+        urls.append(person_base_url.rstrip('/') + f"/drama/{p}/")
+    return urls
+
+
+def _extract_drama_titles_from_person_drama_html(html: str) -> List[str]:
+    """人物のドラマ一覧HTMLから作品名テキストを抽出。
+    eiga.comのドラマ詳細リンクは将来構造変更の可能性があるため、/drama/ または /tv/ を含む a のテキストを候補とする。
+    """
+    titles: List[str] = []
+    # /drama/<id>/ または /tv/... を持つリンクのテキストを抽出
+    for inner in re.findall(r"<a[^>]+href=\"(?:/drama/\d+/|/tv/[^\"]+/)\"[^>]*>([\s\S]*?)</a>", html, re.IGNORECASE):
+        text = sanitize_query(_strip_html(inner))
+        if text and text not in titles:
+            titles.append(text)
+    return titles
+
+
+async def _fetch_person_all_dramas(person_base_url: str) -> tuple[List[str], int]:
+    titles: List[str] = []
+    seen = set()
+    pages = 0
+    for url in _person_drama_page_urls(person_base_url):
+        try:
+            html = await _fetch_text(url)
+        except Exception:
+            break
+        page_titles = _extract_drama_titles_from_person_drama_html(html)
+        pages += 1
+        new_any = False
+        for t in page_titles:
+            if t not in seen:
+                seen.add(t)
+                titles.append(t)
+                new_any = True
+        if not new_any:
+            break
+    return titles, pages
+
+
 def _extract_person_profile(html: str) -> Dict[str, Any]:
-    """人物プロフィール（ふりがな/誕生日年/備考）を簡易抽出。"""
+    """人物プロフィール（かな/生年/没年/備考）を抽出。
+    優先: JSON-LD(@type=Person) → 日本語ラベル（生年月日/誕生日/生年/没年/命日 等） → 括弧内かな。
+    """
     profile: Dict[str, Any] = {"kana": None, "birth_year": None, "death_year": None, "note": None}
+    # 1) JSON-LD (@type Person)
+    try:
+        for obj in _iter_json_ld(html):
+            ty = obj.get("@type")
+            types = [ty] if isinstance(ty, str) else (ty or [])
+            if (isinstance(types, list) and ("Person" in types)) or ty == "Person":
+                alt = (obj.get("alternateName") or obj.get("alternateNames") or "")
+                if isinstance(alt, list):
+                    alt = ",".join([str(a) for a in alt if a])
+                alt = str(alt or "").strip()
+                if alt:
+                    profile["kana"] = alt
+                # description を note 候補に
+                desc = (obj.get("description") or "").strip()
+                if desc and len(desc) >= 40:
+                    profile["note"] = desc
+                bdate = str(obj.get("birthDate") or "").strip()  # YYYY / YYYY-MM-DD
+                if bdate:
+                    m = re.search(r"(18|19|20)\d{2}", bdate)
+                    if m:
+                        by = int(m.group(0))
+                        if 1800 <= by <= 2100:
+                            profile["birth_year"] = by
+                ddate = str(obj.get("deathDate") or "").strip()
+                if ddate:
+                    m = re.search(r"(18|19|20)\d{2}", ddate)
+                    if m:
+                        dy = int(m.group(0))
+                        if 1800 <= dy <= 2100:
+                            profile["death_year"] = dy
+                break
+    except Exception:
+        pass
     text = _strip_html(html)
-    # ふりがな
+    # 2) 日本語ラベル + note本文からの詳細抽出
     try:
-        m = re.search(r"ふりがな[\s　]*[:：]?[\s　]*([\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FFF・\s　]+)", text)
-        if m:
-            profile["kana"] = m.group(1).strip()
+        if not profile.get("kana"):
+            m = re.search(r"(ふりがな|フリガナ|よみがな|読み仮名|読み|ヨミ)[\s　]*[:：]?[\s　]*([\u3040-\u309F\u30A0-\u30FF・ー\s　]{2,40})", text)
+            if m:
+                profile["kana"] = m.group(2).strip()
     except Exception:
         pass
-    # 誕生日（年）
     try:
-        m = re.search(r"誕生日[\s　]*[:：]?[\s　]*([0-9]{4})年", text)
-        if m:
-            by = int(m.group(1))
-            if 1800 <= by <= 2100:
-                profile["birth_year"] = by
+        # 誕生日（YYYY年MM月DD日）/ 生年のみ
+        if not profile.get("birth_year"):
+            m = re.search(r"(生年月日|誕生日)[\s　]*[:：]?[\s　]*((?:18|19|20)\d{2})年(?:\s*(\d{1,2})月)?(?:\s*(\d{1,2})日)?", text)
+            if m:
+                by = int(m.group(2))
+                if 1800 <= by <= 2100:
+                    profile["birth_year"] = by
+        if not profile.get("birth_year"):
+            m = re.search(r"(生年|生まれ)[\s　]*[:：]?[\s　]*((?:18|19|20)\d{2})年", text)
+            if m:
+                by = int(m.group(2))
+                if 1800 <= by <= 2100:
+                    profile["birth_year"] = by
     except Exception:
         pass
-    # 備考（プロフィール冒頭の一文を短く）
     try:
-        # 先頭～最初の句点まで
-        s = text.strip()
-        cut = s.find("。")
-        first = s[:cut+1] if cut != -1 else s[:200]
-        if first:
-            profile["note"] = first.strip()
+        if not profile.get("death_year"):
+            m = re.search(r"(没年|命日|逝去|死亡)[\s　]*[:：]?[\s　]*((?:18|19|20)\d{2})年", text)
+            if m:
+                dy = int(m.group(2))
+                if 1800 <= dy <= 2100:
+                    profile["death_year"] = dy
+    except Exception:
+        pass
+    # 3) 出身（任意）
+    try:
+        m = re.search(r"出身[\s　]*[:：]?[\s　]*([^\s　]+(?:[／/][^\s　]+)?)", text)
+        if m:
+            profile["birth_place"] = m.group(1).strip()
+    except Exception:
+        pass
+
+    # 4) 括弧内かな（例: （よしざわ りょう））
+    try:
+        if not profile.get("kana"):
+            m = re.search(r"（([\u3040-\u309F\u30A0-\u30FF・ー\s]{2,40})）", text)
+            if m:
+                k = m.group(1).strip()
+                # 記号のみなどを除外
+                if re.search(r"[\u3040-\u309F\u30A0-\u30FF]", k):
+                    profile["kana"] = k
+    except Exception:
+        pass
+    # 5) 備考（略歴/プロフィールを最優先で抽出。無ければ本文段落→冒頭1文）
+    try:
+        # 明示ラベルの直後テキストを優先
+        m = re.search(r"(略歴|プロフィール)[\s　]*[:：]?[\s　]*([^\n]+)", text)
+        if m:
+            note = m.group(2).strip()
+            if note:
+                profile["note"] = note
+        if not profile.get("note"):
+            para = _extract_long_paragraph_from_html(html)
+            if para:
+                profile["note"] = para
+        if not profile.get("note"):
+            # ページ全体テキストから略歴らしい塊を推定
+            bio = _extract_bio_from_text(text)
+            if bio:
+                profile["note"] = bio
+        if not profile.get("note"):
+            s = text.strip()
+            cut = s.find("。")
+            first = s[:cut+1] if cut != -1 else s[:200]
+            if first:
+                profile["note"] = first.strip()
     except Exception:
         pass
     return profile
@@ -652,6 +1206,35 @@ def _parse_eiga_movie_id(url: str) -> Optional[str]:
         pr = urlparse(url)
         m = re.match(r"^/movie/(\d+)/?$", pr.path)
         return m.group(1) if m else None
+    except Exception:
+        return None
+
+
+def _parse_eiga_person_id(url: str) -> Optional[str]:
+    try:
+        pr = urlparse(url)
+        m = re.match(r"^/person/(\d+)/?$", pr.path)
+        return m.group(1) if m else None
+    except Exception:
+        return None
+
+
+def _normalize_eiga_person_url(url: str) -> Optional[str]:
+    """eiga.com/person/<id>/... を https://eiga.com/person/<id>/ に正規化して返す。該当しなければ None。"""
+    try:
+        s = (url or "").strip()
+        if not s:
+            return None
+        pr = urlparse(s)
+        if not pr.scheme or not pr.netloc:
+            return None
+        if "eiga.com" not in pr.netloc.lower():
+            return None
+        m = re.match(r"^/person/(\d+)(?:/.*)?$", pr.path)
+        if not m:
+            return None
+        pid = m.group(1)
+        return f"https://eiga.com/person/{pid}/"
     except Exception:
         return None
 
@@ -725,6 +1308,22 @@ async def build_deep_payload(hits: List[Dict[str, Any]]) -> Dict[str, Any]:
                     "role": role,
                     "character": None,
                 })
+        # cast_pairs から person external_id を付与
+        try:
+            for pair in (data.get("cast_pairs") or []):
+                nm = str(pair.get("name") or "").strip()
+                pid = str(pair.get("person_id") or "").strip()
+                if nm and pid:
+                    _add_person(nm)
+                    payload.setdefault("external_ids", []).append({
+                        "entity": "person",
+                        "name": nm,
+                        "source": "eiga.com",
+                        "value": pid,
+                        "url": f"https://eiga.com/person/{pid}/",
+                    })
+        except Exception:
+            pass
         # external_id (eiga.com id)
         mid = _parse_eiga_movie_id(main_url)
         if mid:
@@ -781,17 +1380,40 @@ def _normalize_extracted_payload(data: Dict[str, Any]) -> Dict[str, Any]:
     - next_queries は最大5件・重複除去・文字列化・空白除去
     """
     normalized: Dict[str, Any] = {}
-    normalized["persons"] = list(data.get("persons") or [])
-    normalized["works"] = list(data.get("works") or [])
+    # persons: 役割語の混入を除去
+    persons_in = list(data.get("persons") or [])
+    persons_out: List[Dict[str, Any]] = []
+    for p in persons_in:
+        nm = _remove_role_prefix(str((p or {}).get("name") or ""))
+        if not nm or _is_pure_role_word(nm):
+            continue
+        q = dict(p)
+        q["name"] = nm
+        persons_out.append(q)
+    normalized["persons"] = persons_out
+
+    # works: タイトル先頭の役割語を除去し、役割語だけのタイトルは除外
+    works_in = list(data.get("works") or [])
+    works_out: List[Dict[str, Any]] = []
+    for w in works_in:
+        ttl = _remove_role_prefix(str((w or {}).get("title") or ""))
+        if not ttl or _is_pure_role_word(ttl):
+            continue
+        q = dict(w)
+        q["title"] = ttl
+        works_out.append(q)
+    normalized["works"] = works_out
     normalized["credits"] = list(data.get("credits") or [])
     normalized["external_ids"] = list(data.get("external_ids") or [])
     normalized["unified"] = list(data.get("unified") or [])
     normalized["note"] = data.get("note") if data.get("note") is not None else None
-    # next_queries の正規化
+    # next_queries の正規化（役割語除去/弾き）
     nq: List[str] = []
     for q in (data.get("next_queries") or [])[:10]:  # 念のため上限
-        qs = str(q).strip()
+        qs = _remove_role_prefix(str(q).strip())
         if not qs:
+            continue
+        if _is_pure_role_word(qs):
             continue
         if qs in nq:
             continue
@@ -866,6 +1488,8 @@ async def run_ingest_mode(
         except Exception:
             pass
     collected: List[Dict[str, Any]] = []
+    # URL直指定（eiga.com/person/<id>/...）なら検索を行わず、このURLのみで収集する
+    forced_person_base: Optional[str] = _normalize_eiga_person_url(topic)
 
     # 検索専用キャラ（隠し）を優先使用。存在しなければ可視キャラでフォールバック
     all_names = manager.get_character_names(include_hidden=True)
@@ -900,174 +1524,169 @@ async def run_ingest_mode(
         def _infer_type(q: str) -> str:
             t = base_type
             if t not in ("work", "person"):
-                # 簡易判定: 漢字2文字以上を含み、一般名詞っぽくなければ人物寄り などの軽いヒューリスティック
-                # ここでは指定が無い場合は unknown のまま運用
-                t = "unknown"
+                # ひらかな/カタカナ/漢字のみで2-4文字の固有名に見える場合は人物寄り
+                qs = q.strip()
+                if re.match(r"^[\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FFF]{2,4}$", qs):
+                    t = "person"
+                else:
+                    t = "unknown"
             return t
         current_type = _infer_type(current_query)
 
-        # DuckDuckGo 検索を先に実施し、上位結果をヒントとして同梱
+        # ラウンド内で収集したペイロード（次キーワード選定用）
+        round_payloads: List[Dict[str, Any]] = []
+        # 検索→ヒント生成（分離関数）
         try:
-            # 映画ドメインではナタリー/ヤフー映画/eiga.com を優先し、不足分を .jp で補完
-            search_plan: List[str] = []
-            dom = str(domain or "")
-            if "映画" in dom:
-                search_plan = [
-                    f"{current_query} site:eiga.com",
-                    f"{current_query} 映画.com",
-                    f"{current_query} 映画com",
-                    f"{current_query} site:movies.yahoo.co.jp",
-                    f"{current_query} site:.jp",
-                ]
+            person_base_url: Optional[str] = None
+            if forced_person_base:
+                # 検索スキップ。人物ページのみを情報源にする
+                hits, merged_hits, main_eiga_hits = [], [], []
+                person_base_url = forced_person_base
+                hints_list = f"- PERSON_URL :: {person_base_url}"
+                structured = ""
+                structured_credits = ""
+                deep = ""
+                raw_dump_path = ""
+                hint_block = log_hints_and_build_block(_log, hints_list, structured, structured_credits, deep, hits)
+                _log(f"Forced person mode: {person_base_url}")
             else:
-                search_plan = [f"{current_query} site:.jp"]
-
-            allowed_hosts = {"movies.yahoo.co.jp", "eiga.com"}
-            deny_hosts = {"youtube.com", "www.youtube.com", "tiktok.com", "www.tiktok.com", "jp.mercari.com"}
-
-            merged_hits: List[Dict[str, Any]] = []
-            seen_urls = set()
-            for q in search_plan:
-                if len(merged_hits) >= MAX_HITS_TOTAL:
-                    break
-                partial = search_text(q, region="jp-jp", max_results=MAX_RESULTS_PER_QUERY, safesearch="moderate")
-                for h in partial:
-                    url = (h.get("url") or h.get("href") or "").strip()
-                    if not url:
-                        continue
-                    if url in seen_urls:
-                        continue
-                    host = urlparse(url).netloc.lower()
-                    if host in deny_hosts:
-                        continue
-                    # 映画ドメイン: 許可ドメインを優先採用。許可外は .jp フォールバック段階のみで採用し、ノイズは除外
-                    if "映画" in dom:
-                        if host in allowed_hosts:
-                            seen_urls.add(url)
-                            merged_hits.append(h)
-                        else:
-                            # 最後の .jp クエリ時のみ、許可外でも .jp を許容（denyは除外）
-                            if q.endswith("site:.jp") and host.endswith(".jp"):
-                                seen_urls.add(url)
-                                merged_hits.append(h)
-                    else:
-                        # 非映画ドメインは緩やかに許容（deny除外のみ）
-                        seen_urls.add(url)
-                        merged_hits.append(h)
-                    if len(merged_hits) >= MAX_HITS_TOTAL:
-                        break
-
-            # eiga.com/person と movie の両方を拾い分け
-            main_eiga_hits: List[Dict[str, Any]] = []
-            person_base_url: Optional[str] = _select_person_base_url(merged_hits)
-            for h in merged_hits:
-                url = (h.get("url") or h.get("href") or "").strip()
-                if not url:
-                    continue
-                pr = urlparse(url)
-                if pr.netloc.lower() == "eiga.com" and re.match(r"^/movie/\d+/?$", pr.path):
-                    main_eiga_hits.append(h)
-
-            hits = main_eiga_hits if main_eiga_hits else merged_hits
-            hints_list = "\n".join([f"- {h.get('title')} :: {h.get('url') or h.get('href')} :: {h.get('snippet')}" for h in hits])
-            structured = build_structured_hints(hits)
-            structured_credits = build_structured_credit_hints(hits)
-            deep = await build_deep_hints(hits)
-            # 人物ベースURLが取れたら、全映画タイトルを巡回取得
+                hits, merged_hits, main_eiga_hits, hints_list, structured, structured_credits, deep, raw_dump_path = await perform_web_search_and_hints(current_query, domain)
+                # 人物ベースURL解決
+                person_base_url = await resolve_person_base_url_from_hits(current_query, merged_hits, _log)
+                # 取得元を人物ページに限定表示（他のヒントは抑制）
+                if person_base_url:
+                    hints_list = f"- PERSON_URL :: {person_base_url}"
+                    structured = ""
+                    structured_credits = ""
+                    deep = ""
+                # ログ出力とヒントブロック生成
+                hint_block = log_hints_and_build_block(_log, hints_list, structured, structured_credits, deep, hits)
+            # 生検索結果ファイルの場所をログに出す
+            if raw_dump_path:
+                _log(f"Saved raw search results: {raw_dump_path}")
+            # 人物ベースURLが取れたら、プロフィール/作品一覧を収集
             if person_base_url:
-                # プロフィール抽出
+                _log(f"Person base resolved: {person_base_url}")
                 try:
-                    person_html = await _fetch_text(person_base_url)
-                    profile = _extract_person_profile(person_html)
-                except Exception:
-                    profile = {"kana": None, "birth_year": None, "death_year": None, "note": None}
-                # 映画一覧抽出
-                all_titles, pages = await _fetch_person_all_movies(person_base_url)
-                if all_titles or any(profile.values()):
-                    _log(f"PersonMovie: {len(all_titles)} items, pages={pages}")
-                    # 抽出候補に反映
-                    structured_add = ""
-                    if all_titles:
-                        structured_add = "- 作品候補: " + ", ".join(all_titles[:20])
-                    structured = (structured + "\n" + structured_add) if structured else structured_add
-                    # フィルモグラフィをペイロード化し、後段の登録に回す（role=actor として登録）
-                    person_name = sanitize_query(current_query)
-                    if person_name:
+                    # プロフィール
+                    try:
+                        person_html = await _fetch_text(person_base_url)
+                        profile = _extract_person_profile(person_html)
+                    except Exception:
+                        profile = {"kana": None, "birth_year": None, "death_year": None, "note": None}
+                    # 方針: person が取れていれば movieは不要。dramaのみ巡回
+                    all_titles, pages = ([], 0)
+                    drama_titles, drama_pages = await _fetch_person_all_dramas(person_base_url)
+                    all_entries, _pages2 = ([], 0)
+                    if drama_titles or any(profile.values()):
+                        if drama_titles:
+                            _log(f"PersonDrama: {len(drama_titles)} items, pages={drama_pages}")
+                        # 参考: 映画一覧もログに表示（登録は行わない）
+                        # 映画一覧の取得とログ・ペイロード化（タイトルとURLを正規化して登録）
+                        try:
+                            movie_entries, movie_pages = await _fetch_person_all_movie_entries(person_base_url)
+                            normalized_movies: List[Dict[str, Any]] = []
+                            if movie_entries:
+                                _log("Movie list (from person page):")
+                                for ent in movie_entries[:50]:
+                                    t = _clean_title_token(ent.get('title') or '')
+                                    mid = str(ent.get('movie_id') or '').strip()
+                                    if not t or not mid:
+                                        continue
+                                    url_norm = f"https://eiga.com/movie/{mid}/"
+                                    _log(f"- {t} (id:{mid}) :: {url_norm}")
+                                    normalized_movies.append({"title": t, "movie_id": mid, "url": url_norm})
+                            # 正規化済み映画を DB ペイロードに追加
+                            if normalized_movies:
+                                for m in normalized_movies:
+                                    ttl = m["title"]
+                                    filmography_payload["works"].append({
+                                        "title": ttl, "category": "映画", "year": None, "subtype": None, "summary": None
+                                    })
+                                    filmography_payload["credits"].append({
+                                        "work": ttl, "person": person_name, "role": "actor", "character": None
+                                    })
+                                    filmography_payload["external_ids"].append({
+                                        "entity": "work", "name": ttl, "source": "eiga.com", "value": m["movie_id"], "url": m["url"]
+                                    })
+                        except Exception:
+                            pass
+                        # スナップショットをファイル保存
+                        try:
+                            snap = {
+                                "topic": current_query,
+                                "person_base_url": person_base_url,
+                                "profile": profile,
+                                "movie_count": len(all_titles),
+                                "movie_pages": pages,
+                                "drama_count": len(drama_titles),
+                                "drama_pages": drama_pages,
+                                "movies_sample": all_titles[:50],
+                            }
+                            root_logs = os.path.abspath(os.path.join(BASE_DIR, "..", "logs"))
+                            ts = datetime.now().strftime("%Y%m%d-%H%M%S")
+                            qsafe = sanitize_query(current_query)[:50].replace(" ", "_")
+                            snap_path = os.path.join(root_logs, "person", f"person_{ts}_{qsafe or 'query'}.json")
+                            with open(snap_path, "w", encoding="utf-8") as f:
+                                json.dump(snap, f, ensure_ascii=False, indent=2)
+                            _log(f"Saved person snapshot: {snap_path}")
+                        except Exception:
+                            pass
+                        if not forced_person_base:
+                            structured_add = "- 作品候補: " + ", ".join(drama_titles[:20]) if drama_titles else ""
+                            structured = (structured + "\n" + structured_add) if structured_add and structured else (structured_add or structured)
+                        person_name = sanitize_query(current_query)
+                        if person_name:
+                            try:
+                                person_pid = _parse_eiga_person_id(person_base_url)
+                            except Exception:
+                                person_pid = None
+                        # 作品名トークンのクリーンアップ（「上映中」「配信中」「出演」などの前置きを除去）
+                        cleaned_drama_titles = _dedupe_preserve_order([_clean_title_token(t) for t in drama_titles])
+                        cleaned_drama_titles = [t for t in cleaned_drama_titles if t and not _is_pure_role_word(t)]
+
                         filmography_payload: Dict[str, Any] = {
-                            "persons": [{
-                                "name": person_name,
-                                "kana": profile.get("kana"),
-                                "birth_year": profile.get("birth_year"),
-                                "death_year": profile.get("death_year"),
-                                "note": profile.get("note"),
-                            }],
-                            "works": [{"title": t, "category": "映画", "year": None, "subtype": None, "summary": None} for t in all_titles],
-                            "credits": [{"work": t, "person": person_name, "role": "actor", "character": None} for t in all_titles],
-                            "external_ids": [],
-                            "unified": [],
-                            "note": None,
-                            "next_queries": list(all_titles),
+                                "persons": [{
+                                    "name": person_name,
+                                    "kana": profile.get("kana"),
+                                    "birth_year": profile.get("birth_year"),
+                                    "death_year": profile.get("death_year"),
+                                    "note": profile.get("note"),
+                                }],
+                                "works": ([{"title": t, "category": "ドラマ", "year": None, "subtype": None, "summary": None} for t in cleaned_drama_titles]),
+                                "credits": ([{"work": t, "person": person_name, "role": "actor", "character": None} for t in cleaned_drama_titles]),
+                                "external_ids": ([{
+                                    "entity": "person",
+                                    "name": person_name,
+                                    "source": "eiga.com",
+                                    "value": person_pid,
+                                    "url": person_base_url,
+                                }] if person_pid else []),
+                                "unified": [],
+                                "note": None,
+                            "next_queries": cleaned_drama_titles,
                         }
+                        # 映画エントリ/深掘りはスキップ（dramaのみ運用）
                         collected.append(filmography_payload)
                         round_payloads.append(filmography_payload)
-                    # ヒントブロック再構成
-                    hint_block = ""
-                    if hints_list:
-                        hint_block += f"\n\n## 参考ヒント(検索結果)\n{hints_list}\n"
-                    if structured:
-                        hint_block += f"\n## 抽出候補(自動)\n{structured}\n"
-                    if structured_credits:
-                        hint_block += f"\n## クレジット候補(自動)\n{structured_credits}\n"
-                    if deep:
-                        hint_block += f"\n## 詳細抽出(サイト精読)\n{deep}\n"
+                        _log(f"Added filmography payload: persons={len(filmography_payload['persons'])}, works={len(filmography_payload['works'])}, credits={len(filmography_payload['credits'])}")
+                except Exception as e:
+                    _log(f"Person filmography extraction failed: {e}")
         except Exception:
-            hints_list = ""
-            structured = ""
-            structured_credits = ""
-            deep = ""
-        hint_block = ""
-        if hints_list:
-            hint_block += f"\n\n## 参考ヒント(検索結果)\n{hints_list}\n"
-        if structured:
-            hint_block += f"\n## 抽出候補(自動)\n{structured}\n"
-        if structured_credits:
-            hint_block += f"\n## クレジット候補(自動)\n{structured_credits}\n"
-        if deep:
-            hint_block += f"\n## 詳細抽出(サイト精読)\n{deep}\n"
-
-        # ヒント全文をログへ書き出し
-        if hints_list:
-            _log("Hints dump begin")
-            for ln in hints_list.splitlines():
-                _log(ln)
-            _log("Hints dump end")
-        if structured:
-            _log("Candidates dump begin")
-            for ln in structured.splitlines():
-                _log(ln)
-            _log("Candidates dump end")
-        if structured_credits:
-            _log("Credit candidates dump begin")
-            for ln in structured_credits.splitlines():
-                _log(ln)
-            _log("Credit candidates dump end")
-        if deep:
-            _log("Deep candidates dump begin")
-            for ln in deep.splitlines():
-                _log(ln)
-            _log("Deep candidates dump end")
-
-        _log(f"Hints: {len(hits) if hints_list else 0} items")
+            hits, hints_list, structured, structured_credits, deep = [], "", "", "", ""
+            hint_block = ""
         # 適切な検索結果が乏しい場合は人物/作品のタイプを切替（片側が空近い）
         try:
-            if (not hits) or (('人物候補' not in structured and current_type == 'person') or ('作品候補' not in structured and current_type == 'work')):
-                if current_type in ('person','work'):
-                    current_type = 'work' if current_type == 'person' else 'person'
-                    _log(f"Switched query type: {current_type}")
+            # 人物フィルモグラフィが成立している場合はタイプ切替を抑止
+            filmography_succeeded = any(len(p.get('works') or []) > 0 for p in round_payloads)
+            if not filmography_succeeded:
+                if (not hits) or (('人物候補' not in structured and current_type == 'person') or ('作品候補' not in structured and current_type == 'work')):
+                    if current_type in ('person','work'):
+                        current_type = 'work' if current_type == 'person' else 'person'
+                        _log(f"Switched query type: {current_type}")
         except Exception:
             pass
-        # このラウンドで収集したペイロード（次キーワード選定用）
-        round_payloads: List[Dict[str, Any]] = []
+        # 上記で round_payloads に追記済み
         for name in characters:
             persona = manager.get_persona_prompt(name)
             if strict:
@@ -1240,10 +1859,16 @@ async def run_ingest_mode(
                         n = sanitize_query(w.get("title") or "")
                         if n and n not in next_candidates_round:
                             next_candidates_round.append(n)
-            nk = _select_next_keyword(db_path, next_candidates_round)
-            if nk and nk not in executed_queries and nk not in next_query_queue:
-                next_query_queue.insert(0, nk)
-                _log(f"Enqueued next keyword: {nk} ({current_type or 'unknown'})")
+            # 人物フィルモグラフィが成立している場合は次検索のエンキューも抑止
+            filmography_succeeded = any(len(p.get('works') or []) > 0 for p in round_payloads)
+            if not filmography_succeeded:
+                nk = _select_next_keyword(db_path, next_candidates_round)
+                if nk and nk not in executed_queries and nk not in next_query_queue:
+                    # 役割語プレフィックスは事前除去済みだが念のため再チェック
+                    clean_nk = _remove_role_prefix(nk)
+                    if clean_nk and not _is_pure_role_word(clean_nk):
+                        next_query_queue.insert(0, clean_nk)
+                        _log(f"Enqueued next keyword: {clean_nk} ({current_type or 'unknown'})")
         except Exception:
             pass
 

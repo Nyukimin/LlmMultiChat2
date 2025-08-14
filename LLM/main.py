@@ -8,7 +8,7 @@ from typing import List, Optional
 from fastapi import FastAPI, WebSocket, Body, Query, Path
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import RedirectResponse
+from fastapi.responses import RedirectResponse, FileResponse, Response
 import uvicorn
 
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
@@ -28,7 +28,18 @@ app = FastAPI()
 # CORS: フロントを外部サーブ/ローカルfileスキームから開いた場合でもAPIを叩けるように許可
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=[
+        "http://localhost",
+        "http://localhost:3000",
+        "http://localhost:5173",
+        "http://localhost:8000",
+        "http://localhost:8080",
+        "http://127.0.0.1",
+        "http://127.0.0.1:3000",
+        "http://127.0.0.1:5173",
+        "http://127.0.0.1:8000",
+        "http://127.0.0.1:8080",
+    ],
     allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -41,6 +52,15 @@ conversation_log_dir = None
 operation_log_dir = None
 _last_ingest_result_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "logs", "last_ingest.json")
 _stop_flags: dict[str, bool] = {}
+
+# ---- Favicon handler to avoid 404 spam ----
+@app.get("/favicon.ico")
+async def favicon_handler():
+    icon_path = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'html', 'favicon.ico'))
+    if os.path.exists(icon_path):
+        return FileResponse(icon_path)
+    # No icon file provided → return 204 No Content quietly
+    return Response(status_code=204)
 
 def _resolve_kb_db_path() -> str:
     try:
@@ -380,12 +400,17 @@ async def ws_endpoint(websocket: WebSocket):
     await websocket.accept()
     lm.write_operation_log(operation_log_filename, "INFO", "WebSocket", "WebSocket connection accepted.")
     try:
-        characters = manager.list_characters()
-        config_data = [{"name": char["name"], "display_name": char.get("display_name", char["name"])} for char in characters]
+        characters = [c for c in manager.list_characters() if not c.get("hidden")]
+        config_data = [{
+            "name": char["name"],
+            "display_name": char.get("display_name", char["name"]),
+            "short_name": char.get("short_name", "")
+        } for char in characters]
         await websocket.send_json({
             "type": "config",
             "characters": config_data
         })
+        # クライアントの接続直後の検索モード通知を受けるため、何もしないがログは残す
         lm.write_operation_log(operation_log_filename, "INFO", "WebSocket", "Character configuration sent to client.")
         
         await wm.websocket_endpoint(websocket, manager, log_filename, operation_log_filename)

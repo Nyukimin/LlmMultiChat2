@@ -12,3 +12,5 @@ alwaysApply: true
 - Windows PowerShell でも基本は `conda activate ChatEnv` を使用すること（事前に conda のシェル初期化が必要）。
 - スクリプトから外部コマンドを呼び出す際も、`ChatEnv` が有効な状態で呼び出すこと。
 - 環境名やバージョンの変更が必要な場合は、実施前に必ずユーザーの承認を得ること。
+- Gitコマンドは `ChatEnv` の対応不要
+- シェルの操作はコマンドのみ提示して実際の操作はユーザーに任せる
