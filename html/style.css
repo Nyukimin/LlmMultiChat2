@@ -107,6 +107,9 @@ body {
 .nox-avatar { background-color: var(--nox-color); color: var(--bg-color); border-color: var(--nox-color); box-shadow: 0 0 12px var(--nox-color); }
 .nox-message .typing-indicator span { background-color: var(--nox-color); }
 
+/* ステータスの色は状態別（ACTIVE/IDLE/THINKING）を優先するため、
+   行テーマによる .char-state の色上書きは行わない */
+
 .user-message { align-self: flex-end; flex-direction: row-reverse; }
 .user-message .avatar { margin-left: 15px; }
 .user-message .speaker-name, .user-message .timestamp { text-align: right; }
@@ -122,6 +125,14 @@ body {
 .send-button { background-color: transparent; border: 1px solid var(--lumina-color); color: var(--lumina-color); border-radius: 5px; padding: 8px 12px; cursor: pointer; transition: all 0.3s ease; }
 .send-button:hover, .send-button:focus { background-color: var(--lumina-color); color: var(--bg-color); box-shadow: var(--border-glow); }
 .send-button:disabled { cursor: not-allowed; opacity: 0.5; }
+
+/* --- Tabs (Chat/Logs) --- */
+.tab-container { margin: 8px 20px 0 20px; display: flex; flex-direction: column; flex: 1; min-height: 0; }
+.tabs { display: flex; gap: 8px; margin-bottom: 8px; flex-shrink: 0; }
+.tab { padding: 6px 12px; border: 1px solid #45f3ff; background: rgba(0,0,0,0.2); color: var(--text-color); cursor: pointer; border-radius: 4px; }
+.tab.active { background: rgba(0, 229, 255, 0.15); font-weight: bold; }
+.tab-panel { border: 1px solid rgba(0, 229, 255, 0.2); padding: 8px; border-radius: 6px; flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.system-logs { flex: 1; overflow: auto; background: #0b0b0b; color: #eaeaea; padding: 8px; font-family: var(--font-family-main); }
 
 /* --- Animations & Keyframes --- */
 @keyframes fadeIn { from { opacity: 0; transform: translateY(15px); } to { opacity: 1; transform: translateY(0); } }

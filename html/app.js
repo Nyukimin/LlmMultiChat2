@@ -10,6 +10,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- DOM要素の取得 ---
     const chatLog = document.getElementById('chat-log');
+    const sysLogsEl = document.getElementById('system-logs');
     const chatForm = document.getElementById('chat-form');
     const userInput = document.getElementById('user-input');
     const sendButton = document.getElementById('send-button');
@@ -17,6 +18,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // statusElementsは初期化時に動的に構築する
     let statusElements = {};
     let nameMapping = {};
+    let shortNameMapping = {};
     
     // ★★★ WebSocketのセットアップ ★★★
     const ws = new WebSocket(`ws://${window.location.host}/ws`);
@@ -112,6 +114,28 @@ document.addEventListener('DOMContentLoaded', () => {
     const init = () => {
         appLog('info', 'Function init called');
         chatForm.addEventListener('submit', handleFormSubmit);
+        // タブ切替
+        const tabChat = document.getElementById('tab-chat');
+        const tabLogs = document.getElementById('tab-logs');
+        const panelChat = document.getElementById('panel-chat');
+        const panelLogs = document.getElementById('panel-logs');
+        const activateTab = (tab) => {
+            if (tab === 'chat') {
+                tabChat.classList.add('active');
+                tabLogs.classList.remove('active');
+                panelChat.style.display = '';
+                panelLogs.style.display = 'none';
+            } else {
+                tabChat.classList.remove('active');
+                tabLogs.classList.add('active');
+                panelChat.style.display = 'none';
+                panelLogs.style.display = '';
+                // 自動スクロール
+                sysLogsEl.scrollTop = sysLogsEl.scrollHeight;
+            }
+        };
+        tabChat.addEventListener('click', () => activateTab('chat'));
+        tabLogs.addEventListener('click', () => activateTab('logs'));
         appLog('info', 'Submit event listener added to chatForm.');
         appLog('info', 'Function init finished.');
     };
@@ -132,6 +156,12 @@ document.addEventListener('DOMContentLoaded', () => {
         msgDiv.textContent = text;
         chatLog.appendChild(msgDiv);
         scrollToBottom();
+        // 画面ログにも出力
+        if (sysLogsEl) {
+            const ts = new Date().toLocaleTimeString('ja-JP');
+            sysLogsEl.textContent += `[${ts}] ${text}\n`;
+            sysLogsEl.scrollTop = sysLogsEl.scrollHeight;
+        }
         appLog('info', `System message added: ${text}`);
     };
 
@@ -156,15 +186,47 @@ document.addEventListener('DOMContentLoaded', () => {
         appLog('info', 'Updating character configuration.');
         nameMapping = {};
         statusElements = {};
-        characters.forEach(char => {
-            nameMapping[char.display_name] = char.name;
-            // 英語名に基づいてDOM要素を取得
-            const elementId = `${char.name.toLowerCase()}-state`;
-            statusElements[char.name] = document.getElementById(elementId);
-            if (!statusElements[char.name]) {
-                appLog('warn', `Status element not found for ID: ${elementId}`);
+        // 動的にステータス行を再構築（最大5名）
+        const panel = document.querySelector('.status-panel');
+        if (panel) {
+            while (panel.firstChild) panel.removeChild(panel.firstChild);
+            const max = Math.min(5, (characters || []).length);
+            for (let i = 0; i < max; i++) {
+                const char = characters[i];
+                const row = document.createElement('div');
+                row.className = 'char-status';
+                // アイコン
+                const icon = document.createElement('span');
+                icon.className = 'char-icon';
+                const dn = (char.display_name || char.name || '?');
+                const short = (char.short_name || '').trim();
+                icon.textContent = short ? short : (dn[0] || '?');
+                // 名前
+                const nameText = document.createTextNode(' ' + (char.name || 'UNKNOWN')); // 内部名を表示
+                // 状態
+                const state = document.createElement('span');
+                state.className = 'char-state idle';
+                state.textContent = '● IDLE';
+                row.appendChild(icon);
+                row.appendChild(document.createTextNode((char.display_name || char.name || '')));
+                row.appendChild(document.createTextNode(' '));
+                row.appendChild(state);
+                panel.appendChild(row);
+                nameMapping[char.display_name] = char.name;
+                shortNameMapping[char.display_name] = short || (dn[0] || '?');
+                statusElements[char.name] = state;
+                // 文字色テーマ（上部バーと整合）
+                try {
+                    const themeClass = `${char.name.toLowerCase()}-status`;
+                    row.classList.add(themeClass);
+                } catch (e) {}
             }
-        });
+            if ((characters || []).length > 5) {
+                appLog('warn', 'More than 5 characters provided; showing first 5.');
+                // 画面ログにも警告
+                addSystemMessage('参加キャラクターが多いため、先頭5名のみ表示しています。');
+            }
+        }
         appLog('info', 'Character configuration updated.', nameMapping);
     };
 
@@ -180,6 +242,22 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const avatarDiv = document.createElement('div');
         avatarDiv.className = 'avatar';
+        // キャラごとの色クラスをアバターへ付与
+        switch (speakerInfo.cssClass) {
+            case 'lumina-message':
+                avatarDiv.classList.add('lumina-avatar');
+                break;
+            case 'claris-message':
+                avatarDiv.classList.add('claris-avatar');
+                break;
+            case 'nox-message':
+                avatarDiv.classList.add('nox-avatar');
+                break;
+            case 'user-message':
+            default:
+                // ユーザーは CSS 側で .user-message .avatar にて色付け
+                break;
+        }
         avatarDiv.textContent = speakerInfo.avatarInitial;
         avatarContainer.appendChild(avatarDiv);
 
@@ -233,6 +311,13 @@ document.addEventListener('DOMContentLoaded', () => {
             NOX: { cssClass: 'nox-message', avatarInitial: 'N' }
         };
         const result = info[key] || { cssClass: 'system-message', avatarInitial: 'S' };
+        // avatar は display_name → short_name を優先
+        if (speaker === 'USER') {
+            result.avatarInitial = 'U';
+        } else {
+            const sn = shortNameMapping[speaker];
+            result.avatarInitial = (sn && sn.length) ? sn : ((speaker || 'S').charAt(0));
+        }
         appLog('info', `Speaker info retrieved for: ${speaker}`);
         return result;
     };
