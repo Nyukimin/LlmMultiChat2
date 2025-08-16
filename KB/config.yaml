@@ -4,4 +4,4 @@ max_auto_next: 3
 
 # Default DB path for KB
 # Relative to project root or absolute path
-db_path: "KB/media.db"
+db_path: "KB/DB/media.db"

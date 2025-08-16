@@ -4,7 +4,7 @@ import sys
 from typing import Iterable
 
 BASE = os.path.dirname(os.path.abspath(__file__))
-DB_PATH = os.path.join(BASE, "media.db")
+DB_PATH = os.path.join(BASE, "DB", "media.db")
 
 
 def rows(cur) -> Iterable[tuple]:

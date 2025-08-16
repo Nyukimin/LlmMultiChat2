@@ -11,7 +11,8 @@ def main() -> None:
     ap.add_argument("topic", help="収集対象トピック（例: 吉沢亮 国宝）")
     ap.add_argument("--domain", default="映画", help="対象ドメイン（映画/音楽/小説/漫画/アニメ/ボードゲーム/演劇）")
     ap.add_argument("--rounds", type=int, default=2, help="巡回数（各キャラごとに）")
-    ap.add_argument("--db", default=os.path.join(os.path.dirname(__file__), "..", "KB", "media.db"), help="DBパス")
+    # DBはKB側で解決（--dbは任意指定用に残すが既定値はKB/configに委譲）
+    ap.add_argument("--db", default=None, help="DBパス（省略時はKB/config.yamlのdb_path）")
     args = ap.parse_args()
 
     merged = asyncio.run(run_ingest_mode(args.topic, args.domain, args.rounds, args.db))

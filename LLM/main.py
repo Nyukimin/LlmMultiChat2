@@ -79,8 +79,8 @@ def _resolve_kb_db_path() -> str:
                 db_path = os.path.abspath(os.path.join(kb_dir, db_path))
         return db_path
     except Exception:
-        # フォールバック: 既定の KB/media.db（絶対化）
-        return os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'KB', 'media.db'))
+        # フォールバック: 既定の KB/DB/media.db（絶対化）
+        return os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'KB', 'DB', 'media.db'))
 
 @app.get("/api/db/path")
 async def api_db_path():
@@ -218,46 +218,17 @@ async def api_ingest_stop(payload: dict = Body(...)):
 
 @app.post("/api/kb/init")
 async def api_kb_init(payload: dict = Body(...)):
-    """明示初期化。reset=True で既存DBを削除して作り直す。"""
-    db = str(payload.get("db") or _resolve_kb_db_path())
-    reset = bool(payload.get("reset", False))
-    schema_path = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'KB', 'schema.sql'))
-    logs: list[str] = []
-    existed = os.path.exists(db)
-    did_reset = False
+    """KB初期化はKB公式APIに委譲。"""
     try:
-        with open(schema_path, 'r', encoding='utf-8') as f:
-            schema_sql = f.read()
-        os.makedirs(os.path.dirname(db), exist_ok=True)
-        if reset and existed:
-            try:
-                os.remove(db)
-                did_reset = True
-                logs.append(f"removed existing DB: {db}")
-                lm.write_operation_log(operation_log_filename, "INFO", "KBInit", f"Removed existing DB: {db}")
-            except Exception as e:
-                logs.append(f"failed to remove existing DB: {e}")
-                lm.write_operation_log(operation_log_filename, "ERROR", "KBInit", f"Failed to remove DB: {e}")
-        with sqlite3.connect(db) as conn:
-            conn.executescript(schema_sql)
-            conn.commit()
-            # stats
-            stats = {}
-            try:
-                for t in ["person", "work", "credit", "external_id", "alias", "unified_work", "unified_work_member"]:
-                    try:
-                        cur = conn.execute(f"SELECT COUNT(*) FROM {t}")
-                        stats[t] = int(cur.fetchone()[0])
-                    except Exception:
-                        stats[t] = None
-            except Exception:
-                stats = {}
-        logs.append("schema applied")
-        lm.write_operation_log(operation_log_filename, "INFO", "KBInit", f"Initialized DB: {db}")
-        return {"ok": True, "db_path": db, "existed_before": existed, "did_reset": did_reset, "stats": stats, "logs": logs}
+        # 動的ロード
+        if _kb_dir not in sys.path:
+            sys.path.append(_kb_dir)
+        import api as kb  # type: ignore
+        reset = bool(payload.get("reset", False))
+        res = kb.init_db(reset=reset)
+        return res
     except Exception as e:
-        lm.write_operation_log(operation_log_filename, "ERROR", "KBInit", f"Init failed: {e}")
-        return {"ok": False, "error": str(e), "db_path": db, "existed_before": existed, "did_reset": did_reset, "logs": logs}
+        return {"ok": False, "error": str(e)}
 
 @app.post("/api/kb/cleanup")
 async def api_kb_cleanup(payload: dict = Body(...)):
@@ -297,122 +268,91 @@ def _open_db(db_path: Optional[str] = None) -> sqlite3.Connection:
 
 @app.get("/api/db/persons")
 async def api_db_persons(keyword: str = Query(..., description="人名の部分一致キーワード"), db: Optional[str] = Query(None)):
-    with _open_db(db) as conn:
-        cur = conn.execute(
-            "SELECT id, name FROM person WHERE name LIKE ? ORDER BY name LIMIT 50",
-            (f"%{keyword}%",),
-        )
-        return {"ok": True, "items": [dict(r) for r in cur.fetchall()]}
+    try:
+        if _kb_dir not in sys.path:
+            sys.path.append(_kb_dir)
+        import api as kb  # type: ignore
+        items = kb.persons_search(keyword)
+        return {"ok": True, "items": items}
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
 
 @app.get("/api/db/persons/{person_id}/credits")
 async def api_db_person_credits(person_id: int = Path(...), db: Optional[str] = Query(None)):
-    with _open_db(db) as conn:
-        cur = conn.execute(
-            """
-            SELECT w.id AS work_id, w.title, w.year, c.role, c.character
-            FROM credit c
-            JOIN work w ON w.id=c.work_id
-            WHERE c.person_id=?
-            ORDER BY w.year IS NULL, w.year, w.title
-            """,
-            (person_id,),
-        )
-        return {"ok": True, "items": [dict(r) for r in cur.fetchall()]}
+    try:
+        if _kb_dir not in sys.path:
+            sys.path.append(_kb_dir)
+        import api as kb  # type: ignore
+        items = kb.person_credits(person_id)
+        return {"ok": True, "items": items}
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
 
 @app.get("/api/db/persons/{person_id}")
 async def api_db_person_detail(person_id: int = Path(...), db: Optional[str] = Query(None)):
-    with _open_db(db) as conn:
-        cur = conn.execute("SELECT id, name, kana, birth_year, death_year, note FROM person WHERE id= ?", (person_id,))
-        row = cur.fetchone()
-        if not row:
-            return {"ok": True, "item": None}
-        item = dict(row)
-        cur2 = conn.execute(
-            "SELECT source, value, url FROM external_id WHERE entity_type='person' AND entity_id=? ORDER BY source",
-            (person_id,),
-        )
-        item["external_ids"] = [dict(r) for r in cur2.fetchall()]
+    try:
+        if _kb_dir not in sys.path:
+            sys.path.append(_kb_dir)
+        import api as kb  # type: ignore
+        item = kb.person_detail(person_id)
         return {"ok": True, "item": item}
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
 
 @app.get("/api/db/works")
 async def api_db_works(keyword: str = Query(..., description="作品名の部分一致キーワード"), db: Optional[str] = Query(None)):
-    with _open_db(db) as conn:
-        cur = conn.execute(
-            "SELECT id, title, year FROM work WHERE title LIKE ? ORDER BY year DESC, title LIMIT 50",
-            (f"%{keyword}%",),
-        )
-        return {"ok": True, "items": [dict(r) for r in cur.fetchall()]}
+    try:
+        if _kb_dir not in sys.path:
+            sys.path.append(_kb_dir)
+        import api as kb  # type: ignore
+        items = kb.works_search(keyword)
+        return {"ok": True, "items": items}
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
 
 @app.get("/api/db/works/{work_id}/cast")
 async def api_db_work_cast(work_id: int = Path(...), db: Optional[str] = Query(None)):
-    with _open_db(db) as conn:
-        cur = conn.execute(
-            """
-            SELECT p.id AS person_id, p.name, c.role, c.character
-            FROM credit c
-            JOIN person p ON p.id=c.person_id
-            WHERE c.work_id=?
-            ORDER BY CASE c.role WHEN 'director' THEN 0 WHEN 'actor' THEN 1 ELSE 9 END, p.name
-            """,
-            (work_id,),
-        )
-        return {"ok": True, "items": [dict(r) for r in cur.fetchall()]}
+    try:
+        if _kb_dir not in sys.path:
+            sys.path.append(_kb_dir)
+        import api as kb  # type: ignore
+        items = kb.work_cast(work_id)
+        return {"ok": True, "items": items}
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
 
 @app.get("/api/db/works/{work_id}")
 async def api_db_work_detail(work_id: int = Path(...), db: Optional[str] = Query(None)):
-    with _open_db(db) as conn:
-        cur = conn.execute(
-            """
-            SELECT w.id, w.title, w.year, w.subtype, w.summary, c.name AS category
-            FROM work w
-            JOIN category c ON c.id = w.category_id
-            WHERE w.id=?
-            """,
-            (work_id,),
-        )
-        row = cur.fetchone()
-        if not row:
-            return {"ok": True, "item": None}
-        item = dict(row)
-        cur2 = conn.execute(
-            "SELECT source, value, url FROM external_id WHERE entity_type='work' AND entity_id=? ORDER BY source",
-            (work_id,),
-        )
-        item["external_ids"] = [dict(r) for r in cur2.fetchall()]
+    try:
+        if _kb_dir not in sys.path:
+            sys.path.append(_kb_dir)
+        import api as kb  # type: ignore
+        item = kb.work_detail(work_id)
         return {"ok": True, "item": item}
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
 
 @app.get("/api/db/fts")
 async def api_db_fts(q: str = Query(..., description="FTS5 検索クエリ"), limit: int = Query(50, ge=1, le=200), db: Optional[str] = Query(None)):
-    with _open_db(db) as conn:
-        cur = conn.execute(
-            "SELECT kind, ref_id, snippet(fts, 1, '[', ']', '...', 10) AS snippet FROM fts WHERE fts MATCH ? LIMIT ?",
-            (q, limit),
-        )
-        return {"ok": True, "items": [dict(r) for r in cur.fetchall()]}
+    try:
+        if _kb_dir not in sys.path:
+            sys.path.append(_kb_dir)
+        import api as kb  # type: ignore
+        items = kb.fts_search(q, limit)
+        return {"ok": True, "items": items}
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
 
 @app.get("/api/db/unified")
 async def api_db_unified(title: str = Query(..., description="起点となる作品タイトルの部分一致"), db: Optional[str] = Query(None)):
-    with _open_db(db) as conn:
-        sql = (
-            """
-            WITH target AS (
-              SELECT uw.id AS unified_id
-              FROM work w
-              JOIN unified_work_member uwm ON uwm.work_id=w.id
-              JOIN unified_work uw ON uw.id=uwm.unified_work_id
-              WHERE w.title LIKE ?
-              LIMIT 1
-            )
-            SELECT w.id AS work_id, w.title, w.year, c.name AS category, uwm.relation
-            FROM unified_work_member uwm
-            JOIN work w ON w.id=uwm.work_id
-            JOIN category c ON c.id=w.category_id
-            JOIN target t ON t.unified_id=uwm.unified_work_id
-            ORDER BY w.year, w.title
-            """
-        )
-        cur = conn.execute(sql, (f"%{title}%",))
-        return {"ok": True, "items": [dict(r) for r in cur.fetchall()]}
+    try:
+        if _kb_dir not in sys.path:
+            sys.path.append(_kb_dir)
+        import api as kb  # type: ignore
+        items = kb.unified_by_title(title)
+        return {"ok": True, "items": items}
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
 
 # ==== Suggest API ====
 @app.get("/api/suggest")

@@ -2,7 +2,7 @@ import os
 import sqlite3
 
 BASE = os.path.dirname(os.path.abspath(__file__))
-DB_PATH = os.path.join(BASE, "media.db")
+DB_PATH = os.path.join(BASE, "DB", "media.db")
 SCHEMA = os.path.join(BASE, "schema.sql")
 
 

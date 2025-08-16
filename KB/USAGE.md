@@ -9,19 +9,19 @@
 ## 初期化
 ```bash
 python KB/init_db.py
-# → KB/media.db が生成されます
+# → KB/DB/media.db が生成されます
 ```
 
 ## サンプル投入（任意）
 ```bash
-sqlite3 KB/media.db ".read KB/example_data.sql"
-sqlite3 KB/media.db ".read KB/example_unified.sql"  # 統合作品の例
+sqlite3 KB/DB/media.db ".read KB/example_data.sql"
+sqlite3 KB/DB/media.db ".read KB/example_unified.sql"  # 統合作品の例
 ```
 
 ## 代表クエリの実行
 ```bash
-sqlite3 KB/media.db ".read KB/query_examples.sql"
-sqlite3 KB/media.db ".read KB/query_unified.sql"
+sqlite3 KB/DB/media.db ".read KB/query_examples.sql"
+sqlite3 KB/DB/media.db ".read KB/query_unified.sql"
 ```
 
 ## 代表的な操作
@@ -112,7 +112,7 @@ curl "http://localhost:8000/api/db/fts?q=吉沢*%20OR%20国宝*"
 ```
 
 ## Ingest Mode（DB登録専用モード）
-LLM同士の協調で事実をJSON抽出し、`KB/media.db`へ自動登録します。
+LLM同士の協調で事実をJSON抽出し、`KB/DB/media.db`へ自動登録します。
 
 現行実装は「検索先行」の収集フローです。
 - 各ラウンドの冒頭で DuckDuckGo 検索を実行し、上位ヒットの要約をLLMプロンプトへ同梱
@@ -132,7 +132,7 @@ pip install -r LLM/requirements.txt
 python KB/init_db.py
 
 # 映画ドメインで2巡収集し登録（関連語をシードに拡張）
-python LLM/ingest_main.py "吉沢亮 国宝" --domain 映画 --rounds 2 --db KB/media.db
+python LLM/ingest_main.py "吉沢亮 国宝" --domain 映画 --rounds 2  # --db 省略時はKB設定を使用
 ```
 
 ### JSONスキーマ（抜粋）
@@ -161,9 +161,13 @@ python LLM/ingest_main.py "吉沢亮 国宝" --domain 映画 --rounds 2 --db KB/
 ## CSV投入（任意）
 `sqlite3` を使い、CSVを直接テーブルへ投入できます。
 ```bash
-sqlite3 KB/media.db ".mode csv"
-sqlite3 KB/media.db ".import path/to/person.csv person"
+sqlite3 KB/DB/media.db ".mode csv"
+sqlite3 KB/DB/media.db ".import path/to/person.csv person"
 ```
+
+## 設計概要
+
+詳細は `KB/DESIGN.md` を参照してください。
 
 ## 入力キーと意味（テーブル別まとめ）
 
