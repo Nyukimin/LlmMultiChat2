@@ -17,6 +17,21 @@ document.addEventListener('DOMContentLoaded', () => {
   const suggestBtn = document.getElementById('suggest-btn');
   const suggestListEl = document.getElementById('suggest-list');
 
+  // APIベースの自動判定: 同一オリジン以外でホストされている場合は 127.0.0.1:8000 を既定に
+  const API_BASE = (location.port === '8000' || location.hostname === 'localhost' || location.hostname === '127.0.0.1')
+    ? ''
+    : 'http://127.0.0.1:8000';
+
+  const fetchJSON = async (url, options={}) => {
+    const u = `${API_BASE}${url}`;
+    const res = await fetch(u, { mode: 'cors', ...(options||{}) });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      throw new Error(`HTTP ${res.status} ${res.statusText} ${data && data.error ? data.error : ''}`);
+    }
+    return data;
+  };
+
   const log = (msg) => {
     const ts = new Date().toLocaleTimeString('ja-JP');
     logEl.textContent += `[${ts}] ${msg}\n`;
@@ -38,12 +53,11 @@ document.addEventListener('DOMContentLoaded', () => {
     log(`呼び出し開始 topic='${topic}', type=${topicType}, domain='${domain}', rounds=${rounds}, strict=${strict}`);
 
     try {
-      const res = await fetch('/api/ingest', {
+      const data = await fetchJSON('/api/ingest', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ topic, domain, rounds, strict, topicType, session })
       });
-      const data = await res.json();
       if (!data || !data.ok) {
         log('エラー: サーバ応答が不正です');
         summaryEl.textContent = JSON.stringify(data, null, 2);
@@ -68,24 +82,18 @@ document.addEventListener('DOMContentLoaded', () => {
   stopBtn.addEventListener('click', async () => {
     try {
       const s = currentSession || 'default-session';
-      await fetch('/api/ingest/stop', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ session: s }) });
+      await fetchJSON('/api/ingest/stop', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ session: s }) });
       log('停止要求を送信しました');
     } catch (e) {
       log(`停止要求エラー: ${e}`);
     }
   });
 
-  // KB初期化（2段構成）
-  initKbBtn.addEventListener('click', () => {
-    initConfirm.style.display = 'block';
-  });
-  initNo.addEventListener('click', () => {
-    initConfirm.style.display = 'none';
-  });
-  initYes.addEventListener('click', async () => {
+  // KB初期化（1クリック確認→即実行）
+  initKbBtn.addEventListener('click', async () => {
     try {
-      const res = await fetch('/api/kb/init', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({}) });
-      const data = await res.json();
+      if (!confirm('KBを初期化します。既存データは失われます。実行しますか？')) return;
+      const data = await fetchJSON('/api/kb/init', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({}) });
       if (!data || !data.ok) {
         log(`KB初期化失敗: ${(data && data.error) || 'unknown error'}`);
       } else {
@@ -93,8 +101,6 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     } catch (e) {
       log(`KB初期化エラー: ${e}`);
-    } finally {
-      initConfirm.style.display = 'none';
     }
   });
 
@@ -124,8 +130,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const q = (suggestQEl.value || topicEl.value || '').trim();
     if (!q) { log('サジェストのクエリが未入力です'); return; }
     try {
-      const res = await fetch(`/api/suggest?type=${encodeURIComponent(type)}&q=${encodeURIComponent(q)}`);
-      const data = await res.json();
+      const res = await fetchJSON(`/api/suggest?type=${encodeURIComponent(type)}&q=${encodeURIComponent(q)}`);
+      const data = res;
       if (!data || !data.ok) {
         log('サジェスト取得エラー');
         renderSuggest([]);

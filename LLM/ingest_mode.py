@@ -14,6 +14,7 @@ from llm_instance_manager import LLMInstanceManager
 from log_manager import write_operation_log
 from readiness_checker import ensure_ollama_model_ready_sync
 from web_search import search_text
+from normalize import normalize_title as nz_title, normalize_person_name as nz_person, looks_like_role_list_plus_name as nz_rolelist
 
 # KB ingestion
 import sys
@@ -21,21 +22,33 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 KB_DIR = os.path.join(BASE_DIR, "..", "KB")
 if KB_DIR not in sys.path:
     sys.path.append(KB_DIR)
+ingest_payload = None  # type: ignore
 try:
-    from ingest import ingest_payload  # type: ignore
+    from ingest import ingest_payload as _ingest_payload  # type: ignore
+    ingest_payload = _ingest_payload  # type: ignore
 except Exception:
-    ingest_payload = None  # type: ignore
+    try:
+        # Fallback: load KB/ingest.py by absolute path (module-less load)
+        import importlib.util as _ilu
+        _mod_path = os.path.join(KB_DIR, "ingest.py")
+        _spec = _ilu.spec_from_file_location("kb_ingest", _mod_path)
+        if _spec and _spec.loader:
+            _mod = _ilu.module_from_spec(_spec)
+            _spec.loader.exec_module(_mod)
+            ingest_payload = getattr(_mod, "ingest_payload", None)  # type: ignore
+    except Exception:
+        ingest_payload = None  # type: ignore
 
 
 def ensure_dirs():
-    os.makedirs(os.path.join(BASE_DIR, "logs"), exist_ok=True)
-    os.makedirs(os.path.join(BASE_DIR, "..", "logs"), exist_ok=True)
-    os.makedirs(os.path.join(BASE_DIR, "..", "logs", "person"), exist_ok=True)
+    root_logs = os.path.abspath(os.path.join(BASE_DIR, "..", "logs"))
+    os.makedirs(root_logs, exist_ok=True)
+    os.makedirs(os.path.join(root_logs, "person"), exist_ok=True)
+    os.makedirs(os.path.join(root_logs, "search"), exist_ok=True)
 
 
 def build_extractor_prompt(domain: str) -> str:
-    template = """あなたは事実収集アシスタントです。以下の対象ドメインに限定し、確度の高い事実のみを抽出します。
-対象ドメイン: {DOMAIN}
+    template = """対象ドメイン: {DOMAIN}
 
 厳格な出力規則（絶対遵守）:
 - 出力は JSON オブジェクト 1個のみ。前置き・後置き・説明文・見出し・箇条書き・Markdown（``` 等）一切禁止。
@@ -175,7 +188,7 @@ def sanitize_query(query: str) -> str:
 MAX_RESULTS_PER_QUERY = 12  # 1クエリあたり取得件数（従来: 8）
 MAX_HITS_TOTAL = 8          # まとめて採用する最大件数（従来: 8）
 MAX_DEEP_FETCH = 6          # 精読する最大件数
-FETCH_TIMEOUT_SEC = 8.0
+FETCH_TIMEOUT_SEC = 20.0
 FETCH_BYTES_LIMIT = 100000  # 過大ページの取り過ぎ防止（詳細抽出向けに拡大）
 
 ROLE_KEYWORDS = {
@@ -185,13 +198,14 @@ ROLE_KEYWORDS = {
     "キャスト": "actor",
     "声優": "voice",
     "脚本": "screenplay",
+    "脚色": "screenplay",
     "原作": "author",
     "音楽": "composer",
 }
 
 # 役割語プリフィックス（先頭に付いていたら除去/除外対象）
 ROLE_PREFIXES = [
-    "出演", "主演", "監督", "脚本", "原作", "音楽", "声優", "主題歌", "音響効果", "プロデューサー",
+    "出演", "主演", "監督", "脚本", "脚色", "原作", "音楽", "声優", "主題歌", "音響効果", "プロデューサー",
 ]
 
 # ステータス系プリフィックス（作品名の前に付く見出し語）
@@ -204,9 +218,9 @@ def _remove_role_prefix(text: str) -> str:
     if not s:
         return s
     for pref in ROLE_PREFIXES:
-        # パターン: 先頭が 役割語 [：:・\s] のいずれかで続く
-        if re.match(rf"^{re.escape(pref)}[：:・\s]", s):
-            s = re.sub(rf"^{re.escape(pref)}[：:・\s]+", "", s, count=1).strip()
+        # パターン: 先頭が 役割語 [：:・／/\s] のいずれかで続く
+        if re.match(rf"^{re.escape(pref)}[：:・／/\s]", s):
+            s = re.sub(rf"^{re.escape(pref)}[：:・／/\s]+", "", s, count=1).strip()
             break
         # 役割語のみ
         if s == pref:
@@ -375,10 +389,10 @@ def build_structured_hints(hits: List[Dict[str, Any]]) -> str:
 def _clean_title_token(token: str) -> str:
     s = str(token or "").strip()
     # 役割語/状態ラベル（上映中/配信中/出演 等）を先頭から削除
-    s = re.sub(r"^(上映中|配信中)\s+", "", s)
+    s = re.sub(r"^(上映中|配信中)[\s／/]+", "", s)
     s = _remove_role_prefix(s)
     # 余計な空白の正規化
-    s = re.sub(r"\s+", " ", s).strip()
+    s = re.sub(r"[\s／/]+", " ", s).strip()
     return s
 
 def _dedupe_preserve_order(items: List[str]) -> List[str]:
@@ -485,22 +499,33 @@ def _jp_text_score(s: str) -> int:
 
 async def _fetch_text(url: str) -> str:
     headers = {"User-Agent": "Mozilla/5.0 (IngestBot/1.0)"}
-    async with httpx.AsyncClient(follow_redirects=True, timeout=FETCH_TIMEOUT_SEC, headers=headers) as client:
-        r = await client.get(url)
-        r.raise_for_status()
-        # eiga.com は UTF-8 固定でデコード（誤判定時の文字化けを防止）
+    last_exc: Optional[Exception] = None
+    for attempt in range(2):  # 1回リトライ
         try:
-            host = urlparse(url).netloc.lower()
-        except Exception:
-            host = ""
-        if "eiga.com" in host:
-            content = r.content.decode("utf-8", errors="ignore")
-        else:
-            # httpx の推定に委ねる
-            content = r.text
-        if len(content) > FETCH_BYTES_LIMIT:
-            content = content[:FETCH_BYTES_LIMIT]
-        return content
+            async with httpx.AsyncClient(follow_redirects=True, timeout=FETCH_TIMEOUT_SEC, headers=headers) as client:
+                r = await client.get(url)
+                r.raise_for_status()
+                # eiga.com は UTF-8 固定でデコード（誤判定時の文字化けを防止）
+                try:
+                    host = urlparse(url).netloc.lower()
+                except Exception:
+                    host = ""
+                if "eiga.com" in host:
+                    content = r.content.decode("utf-8", errors="ignore")
+                else:
+                    # httpx の推定に委ねる
+                    content = r.text
+                if len(content) > FETCH_BYTES_LIMIT:
+                    content = content[:FETCH_BYTES_LIMIT]
+                return content
+        except Exception as e:
+            last_exc = e
+            if attempt == 0:
+                continue
+            raise
+    if last_exc:
+        raise last_exc
+    return ""
 
 
 def _extract_meta_title(html: str) -> str:
@@ -664,12 +689,12 @@ async def build_deep_hints(hits: List[Dict[str, Any]]) -> str:
         if not url:
             continue
         host = urlparse(url).netloc.lower()
-        # eiga.com はメイン作品ページ (/movie/<id>/) のみ対象にする
+        # eiga.com のみ対象（/movie/<id>/ のメイン作品ページ）
         if host == "eiga.com":
             pr = urlparse(url)
             if not re.match(r"^/movie/\d+/?$", pr.path):
                 continue
-        elif host != "movies.yahoo.co.jp":
+        else:
             continue
         try:
             html = await _fetch_text(url)
@@ -804,7 +829,7 @@ async def perform_web_search_and_hints(current_query: str, domain: str) -> tuple
     else:
         search_plan = [f"{current_query} site:.jp"]
 
-    allowed_hosts = {"movies.yahoo.co.jp", "eiga.com"}
+    allowed_hosts = {"eiga.com"}
     deny_hosts = {"youtube.com", "www.youtube.com", "tiktok.com", "www.tiktok.com", "jp.mercari.com"}
 
     merged_hits: List[Dict[str, Any]] = []
@@ -1083,6 +1108,49 @@ async def _fetch_person_all_dramas(person_base_url: str) -> tuple[List[str], int
     return titles, pages
 
 
+def _clean_note_text(raw: str) -> Optional[str]:
+    try:
+        s = (raw or "").strip()
+        if not s:
+            return None
+        # ノイズ語（ナビ/特集/フッター等）の除去・判定
+        noise_keywords = [
+            "作品情報・最新ニュース - 映画.com",
+            "映画.com",
+            "MENU",
+            "おすすめ情報",
+            "注目特集",
+            "ランキング",
+            "おすすめ",
+            "提供：",
+            "©",
+        ]
+        # 末尾のコピーライトや特集系の後ろは切り落とす
+        cut_markers = ["©", "おすすめ情報", "注目特集", "MENU"]
+        for mk in cut_markers:
+            idx = s.find(mk)
+            if idx != -1:
+                s = s[:max(0, idx)].strip()
+        # 日本語文字が一定割合未満なら破棄
+        jp_count = len(re.findall(r"[\u3040-\u30FF一-龥]", s))
+        if jp_count < max(20, int(len(s) * 0.2)):
+            return None
+        # ノイズ語が多すぎる場合は破棄
+        hits = sum(1 for k in noise_keywords if k in s)
+        if hits >= 2:
+            return None
+        # 余分な空白の正規化
+        s = re.sub(r"\s+", " ", s)
+        # 長すぎる場合は適度に丸める（文末まで）
+        max_len = 700
+        if len(s) > max_len:
+            cut = s.rfind("。", 0, max_len)
+            s = (s[:cut+1] if cut != -1 else s[:max_len]).strip()
+        return s if len(s) >= 40 else None
+    except Exception:
+        return None
+
+
 def _extract_person_profile(html: str) -> Dict[str, Any]:
     """人物プロフィール（かな/生年/没年/備考）を抽出。
     優先: JSON-LD(@type=Person) → 日本語ラベル（生年月日/誕生日/生年/没年/命日 等） → 括弧内かな。
@@ -1102,8 +1170,10 @@ def _extract_person_profile(html: str) -> Dict[str, Any]:
                     profile["kana"] = alt
                 # description を note 候補に
                 desc = (obj.get("description") or "").strip()
-                if desc and len(desc) >= 40:
-                    profile["note"] = desc
+                if desc:
+                    cleaned = _clean_note_text(desc)
+                    if cleaned:
+                        profile["note"] = cleaned
                 bdate = str(obj.get("birthDate") or "").strip()  # YYYY / YYYY-MM-DD
                 if bdate:
                     m = re.search(r"(18|19|20)\d{2}", bdate)
@@ -1180,23 +1250,30 @@ def _extract_person_profile(html: str) -> Dict[str, Any]:
         m = re.search(r"(略歴|プロフィール)[\s　]*[:：]?[\s　]*([^\n]+)", text)
         if m:
             note = m.group(2).strip()
-            if note:
-                profile["note"] = note
+            cleaned = _clean_note_text(note)
+            if cleaned:
+                profile["note"] = cleaned
         if not profile.get("note"):
             para = _extract_long_paragraph_from_html(html)
             if para:
-                profile["note"] = para
+                cleaned = _clean_note_text(para)
+                if cleaned:
+                    profile["note"] = cleaned
         if not profile.get("note"):
             # ページ全体テキストから略歴らしい塊を推定
             bio = _extract_bio_from_text(text)
             if bio:
-                profile["note"] = bio
+                cleaned = _clean_note_text(bio)
+                if cleaned:
+                    profile["note"] = cleaned
         if not profile.get("note"):
             s = text.strip()
             cut = s.find("。")
             first = s[:cut+1] if cut != -1 else s[:200]
             if first:
-                profile["note"] = first.strip()
+                cleaned = _clean_note_text(first)
+                if cleaned:
+                    profile["note"] = cleaned
     except Exception:
         pass
     return profile
@@ -1393,17 +1470,77 @@ def _normalize_extracted_payload(data: Dict[str, Any]) -> Dict[str, Any]:
     normalized["persons"] = persons_out
 
     # works: タイトル先頭の役割語を除去し、役割語だけのタイトルは除外
+    def _looks_like_role_list_plus_name(text: str) -> bool:
+        return nz_rolelist(str(text or ""))
     works_in = list(data.get("works") or [])
     works_out: List[Dict[str, Any]] = []
+
+    def _clean_eigacom_title_and_year(title: str) -> tuple[str, Optional[int]]:
+        try:
+            s = str(title or "").strip()
+            try:
+                import unicodedata as _ud
+                s = _ud.normalize('NFKC', s)
+            except Exception:
+                pass
+            s = s.replace("\u3000", " ")
+            s = re.sub(r"[／/]+", " ", s)
+            m = re.match(r"^(.*?)\s*[:：]\s*作品情報・キャスト・あらすじ\s*-\s*映画\.com\s*\((\d{4})\)\s*$", s)
+            if m:
+                name = m.group(1).strip()
+                yr = int(m.group(2)) if m.group(2) else None
+                return name, yr
+            m2 = re.match(r"^(.*)\((\d{4})\)\s*$", s)
+            if m2 and not re.search(r"作品情報・キャスト・あらすじ", s):
+                name = m2.group(1).strip().rstrip('：:')
+                yr = int(m2.group(2))
+                return name, yr
+            return s.strip(), None
+        except Exception:
+            return str(title or "").strip(), None
+
+    original_to_clean: Dict[str, str] = {}
     for w in works_in:
         ttl = _remove_role_prefix(str((w or {}).get("title") or ""))
         if not ttl or _is_pure_role_word(ttl):
             continue
+        # 役割語の連結 + 名前 形式は除外
+        if _looks_like_role_list_plus_name(ttl):
+            continue
         q = dict(w)
-        q["title"] = ttl
+        clean_tt, year_found = _clean_eigacom_title_and_year(ttl)
+        if year_found and not q.get("year"):
+            try:
+                yi = int(year_found)
+                if 1800 <= yi <= 2100:
+                    q["year"] = yi
+            except Exception:
+                pass
+        q["title"] = clean_tt
+        if ttl != clean_tt:
+            original_to_clean[ttl] = clean_tt
         works_out.append(q)
     normalized["works"] = works_out
-    normalized["credits"] = list(data.get("credits") or [])
+
+    # credits 側の work 名/ person 名も同様に正規化
+    credits_in = list(data.get("credits") or [])
+    credits_out: List[Dict[str, Any]] = []
+    for c in credits_in:
+        cc = dict(c)
+        wname = str((cc.get("work") or "").strip())
+        if wname:
+            w_clean, _yr = _clean_eigacom_title_and_year(_remove_role_prefix(_remove_status_prefix(wname)))
+            cc["work"] = w_clean
+        # person 名の役割語・状態語除去、スラッシュ→空白、圧縮
+        pname = str((cc.get("person") or "").strip())
+        if pname:
+            pname = nz_person(pname)
+        if pname:
+            cc["person"] = pname
+            credits_out.append(cc)
+            continue
+        # person が空になったらこの行は破棄
+    normalized["credits"] = credits_out
     normalized["external_ids"] = list(data.get("external_ids") or [])
     normalized["unified"] = list(data.get("unified") or [])
     normalized["note"] = data.get("note") if data.get("note") is not None else None
@@ -1463,10 +1600,12 @@ async def run_ingest_mode(
     cancel_check: Optional[Callable[[], bool]] = None,
     topic_type: str = "unknown",
     auto_next_max: int = 3,
+    register: bool = True,
 ) -> Dict[str, Any]:
     ensure_dirs()
-    log_filename = os.path.join(BASE_DIR, "logs", "ingest_conversation.log")
-    operation_log_filename = os.path.join(BASE_DIR, "..", "logs", "operation_ingest.log")
+    root_logs = os.path.abspath(os.path.join(BASE_DIR, "..", "logs"))
+    log_filename = os.path.join(root_logs, "ingest_conversation.log")
+    operation_log_filename = os.path.join(root_logs, "operation_ingest.log")
 
     manager = CharacterManager(log_filename, operation_log_filename)
 
@@ -1583,9 +1722,9 @@ async def run_ingest_mode(
                             _log(f"PersonDrama: {len(drama_titles)} items, pages={drama_pages}")
                         # 参考: 映画一覧もログに表示（登録は行わない）
                         # 映画一覧の取得とログ・ペイロード化（タイトルとURLを正規化して登録）
+                        normalized_movies: List[Dict[str, Any]] = []
                         try:
                             movie_entries, movie_pages = await _fetch_person_all_movie_entries(person_base_url)
-                            normalized_movies: List[Dict[str, Any]] = []
                             if movie_entries:
                                 _log("Movie list (from person page):")
                                 for ent in movie_entries[:50]:
@@ -1596,19 +1735,6 @@ async def run_ingest_mode(
                                     url_norm = f"https://eiga.com/movie/{mid}/"
                                     _log(f"- {t} (id:{mid}) :: {url_norm}")
                                     normalized_movies.append({"title": t, "movie_id": mid, "url": url_norm})
-                            # 正規化済み映画を DB ペイロードに追加
-                            if normalized_movies:
-                                for m in normalized_movies:
-                                    ttl = m["title"]
-                                    filmography_payload["works"].append({
-                                        "title": ttl, "category": "映画", "year": None, "subtype": None, "summary": None
-                                    })
-                                    filmography_payload["credits"].append({
-                                        "work": ttl, "person": person_name, "role": "actor", "character": None
-                                    })
-                                    filmography_payload["external_ids"].append({
-                                        "entity": "work", "name": ttl, "source": "eiga.com", "value": m["movie_id"], "url": m["url"]
-                                    })
                         except Exception:
                             pass
                         # スナップショットをファイル保存
@@ -1666,6 +1792,24 @@ async def run_ingest_mode(
                                 "note": None,
                             "next_queries": cleaned_drama_titles,
                         }
+                        # 映画エントリを追加（人物ページに基づく）
+                        try:
+                            if normalized_movies:
+                                for m in normalized_movies:
+                                    ttl = m.get("title") or ""
+                                    if not ttl:
+                                        continue
+                                    filmography_payload["works"].append({
+                                        "title": ttl, "category": "映画", "year": None, "subtype": None, "summary": None
+                                    })
+                                    filmography_payload["credits"].append({
+                                        "work": ttl, "person": person_name, "role": "actor", "character": None
+                                    })
+                                    filmography_payload["external_ids"].append({
+                                        "entity": "work", "name": ttl, "source": "eiga.com", "value": m.get("movie_id"), "url": m.get("url")
+                                    })
+                        except Exception:
+                            pass
                         # 映画エントリ/深掘りはスキップ（dramaのみ運用）
                         collected.append(filmography_payload)
                         round_payloads.append(filmography_payload)
@@ -1689,10 +1833,11 @@ async def run_ingest_mode(
         # 上記で round_payloads に追記済み
         for name in characters:
             persona = manager.get_persona_prompt(name)
+            base_persona = f"{persona}\n\n" if persona else ""
             if strict:
-                system_prompt = f"## 収集モード(STRICT)\n{extractor}\n\n必ず有効なJSONのみを出力してください。前置き・補足・マークダウンは禁止です。"
+                system_prompt = f"{base_persona}## 収集モード(STRICT)\n{extractor}\n\n必ず有効なJSONのみを出力してください。前置き・補足・マークダウンは禁止です。"
             else:
-                system_prompt = f"{persona}\n\n## 収集モード\n{extractor}"
+                system_prompt = f"{base_persona}## 収集モード\n{extractor}"
             llm = manager.get_llm(name)
             if llm is None:
                 continue
@@ -1753,7 +1898,7 @@ async def run_ingest_mode(
                 else:
                     # リトライ（STRICT再試行）
                     if not strict:
-                        sp = f"## 収集モード(STRICT-RETRY)\n{extractor}\n\nJSONのみを返してください。先頭から {{ と }} までの有効JSONのみ。"
+                        sp = f"{persona}\n\n## 収集モード(STRICT-RETRY)\n{extractor}\n\nJSONのみを返してください。先頭から {{ と }} までの有効JSONのみ。"
                         resp2 = await asyncio.wait_for(llm.ainvoke(sp, f"収集対象: {current_query}{hint_block}"), timeout=60.0)
                         data2 = extract_json(resp2)
                         if isinstance(data2, dict):
@@ -1883,6 +2028,10 @@ async def run_ingest_mode(
             break
 
     merged = merge_payloads(collected)
+    try:
+        _log(f"DEBUG: merged sizes persons={len(merged.get('persons') or [])}, works={len(merged.get('works') or [])}, credits={len(merged.get('credits') or [])}, external_ids={len(merged.get('external_ids') or [])}")
+    except Exception:
+        pass
 
     # next keyword selection
     next_candidates: List[str] = []
@@ -1905,11 +2054,34 @@ async def run_ingest_mode(
 
     next_keyword: Optional[str] = _select_next_keyword(db_path, next_candidates)
 
-    if ingest_payload is None:
-        write_operation_log(operation_log_filename, "ERROR", "IngestMode", "KB.ingest not available; skipping DB registration.")
+    if not register:
+        # 登録をスキップ（情報検索モードOFF）
+        try:
+            write_operation_log(operation_log_filename, "INFO", "IngestMode", "DB registration skipped (register=False).")
+            _log("Registered to DB: skipped (info_search_mode=OFF)")
+        except Exception:
+            pass
+    elif ingest_payload is None:
+        try:
+            dbg = {
+                "KB_DIR": KB_DIR,
+                "BASE_DIR": BASE_DIR,
+                "CWD": os.getcwd(),
+                "has_KB_in_sys_path": (KB_DIR in sys.path),
+                "ingest_py_exists": os.path.exists(os.path.join(KB_DIR, "ingest.py")),
+            }
+            write_operation_log(operation_log_filename, "ERROR", "IngestMode", f"KB.ingest not available; skipping DB registration. debug={dbg}")
+            _log(f"Ingest import failure debug: {dbg}")
+        except Exception:
+            write_operation_log(operation_log_filename, "ERROR", "IngestMode", "KB.ingest not available; skipping DB registration.")
     else:
         try:
-            ingest_payload(os.path.abspath(db_path), merged)
+            db_abs = os.path.abspath(db_path)
+            try:
+                _log(f"DEBUG: DB path abs={db_abs} exists={os.path.exists(db_abs)}")
+            except Exception:
+                pass
+            ingest_payload(db_abs, merged)
             write_operation_log(operation_log_filename, "INFO", "IngestMode", f"Registered to DB: {db_path}")
             _log("Registered to DB")
             # 追加要素のサマリをログ出力

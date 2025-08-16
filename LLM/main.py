@@ -65,16 +65,26 @@ async def favicon_handler():
 def _resolve_kb_db_path() -> str:
     try:
         kb_cfg_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'KB', 'config.yaml')
-        kb_dir = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'KB'))
+        root_dir = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..'))
+        kb_dir = os.path.join(root_dir, 'KB')
         with open(kb_cfg_path, 'r', encoding='utf-8') as f:
             kb_cfg = yaml.safe_load(f) or {}
         db_path = kb_cfg.get('db_path') or 'media.db'
         if not os.path.isabs(db_path):
-            db_path = os.path.abspath(os.path.join(kb_dir, db_path))
+            # ルール: サブディレクトリを含む場合はプロジェクトルート基準、
+            # 単純ファイル名の場合は KB ディレクトリ基準
+            if ("/" in db_path) or ("\\" in db_path):
+                db_path = os.path.abspath(os.path.join(root_dir, db_path))
+            else:
+                db_path = os.path.abspath(os.path.join(kb_dir, db_path))
         return db_path
     except Exception:
         # フォールバック: 既定の KB/media.db（絶対化）
         return os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'KB', 'media.db'))
+
+@app.get("/api/db/path")
+async def api_db_path():
+    return {"ok": True, "db": _resolve_kb_db_path()}
 
 # KBユーティリティの動的ロード（パッケージ化されていないKB直下から）
 _kb_dir = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'KB'))
@@ -208,19 +218,46 @@ async def api_ingest_stop(payload: dict = Body(...)):
 
 @app.post("/api/kb/init")
 async def api_kb_init(payload: dict = Body(...)):
-    """明示初期化。自動初期化は行わない方針のため、UIからの要請でのみ実施。"""
+    """明示初期化。reset=True で既存DBを削除して作り直す。"""
     db = str(payload.get("db") or _resolve_kb_db_path())
+    reset = bool(payload.get("reset", False))
     schema_path = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'KB', 'schema.sql'))
+    logs: list[str] = []
+    existed = os.path.exists(db)
+    did_reset = False
     try:
         with open(schema_path, 'r', encoding='utf-8') as f:
             schema_sql = f.read()
         os.makedirs(os.path.dirname(db), exist_ok=True)
+        if reset and existed:
+            try:
+                os.remove(db)
+                did_reset = True
+                logs.append(f"removed existing DB: {db}")
+                lm.write_operation_log(operation_log_filename, "INFO", "KBInit", f"Removed existing DB: {db}")
+            except Exception as e:
+                logs.append(f"failed to remove existing DB: {e}")
+                lm.write_operation_log(operation_log_filename, "ERROR", "KBInit", f"Failed to remove DB: {e}")
         with sqlite3.connect(db) as conn:
             conn.executescript(schema_sql)
             conn.commit()
-        return {"ok": True, "db_path": db}
+            # stats
+            stats = {}
+            try:
+                for t in ["person", "work", "credit", "external_id", "alias", "unified_work", "unified_work_member"]:
+                    try:
+                        cur = conn.execute(f"SELECT COUNT(*) FROM {t}")
+                        stats[t] = int(cur.fetchone()[0])
+                    except Exception:
+                        stats[t] = None
+            except Exception:
+                stats = {}
+        logs.append("schema applied")
+        lm.write_operation_log(operation_log_filename, "INFO", "KBInit", f"Initialized DB: {db}")
+        return {"ok": True, "db_path": db, "existed_before": existed, "did_reset": did_reset, "stats": stats, "logs": logs}
     except Exception as e:
-        return {"ok": False, "error": str(e), "db_path": db}
+        lm.write_operation_log(operation_log_filename, "ERROR", "KBInit", f"Init failed: {e}")
+        return {"ok": False, "error": str(e), "db_path": db, "existed_before": existed, "did_reset": did_reset, "logs": logs}
 
 @app.post("/api/kb/cleanup")
 async def api_kb_cleanup(payload: dict = Body(...)):
@@ -285,9 +322,17 @@ async def api_db_person_credits(person_id: int = Path(...), db: Optional[str] = 
 @app.get("/api/db/persons/{person_id}")
 async def api_db_person_detail(person_id: int = Path(...), db: Optional[str] = Query(None)):
     with _open_db(db) as conn:
-        cur = conn.execute("SELECT id, name, kana, birth_year, death_year, note FROM person WHERE id=?", (person_id,))
+        cur = conn.execute("SELECT id, name, kana, birth_year, death_year, note FROM person WHERE id= ?", (person_id,))
         row = cur.fetchone()
-        return {"ok": True, "item": dict(row) if row else None}
+        if not row:
+            return {"ok": True, "item": None}
+        item = dict(row)
+        cur2 = conn.execute(
+            "SELECT source, value, url FROM external_id WHERE entity_type='person' AND entity_id=? ORDER BY source",
+            (person_id,),
+        )
+        item["external_ids"] = [dict(r) for r in cur2.fetchall()]
+        return {"ok": True, "item": item}
 
 @app.get("/api/db/works")
 async def api_db_works(keyword: str = Query(..., description="作品名の部分一致キーワード"), db: Optional[str] = Query(None)):
@@ -326,7 +371,15 @@ async def api_db_work_detail(work_id: int = Path(...), db: Optional[str] = Query
             (work_id,),
         )
         row = cur.fetchone()
-        return {"ok": True, "item": dict(row) if row else None}
+        if not row:
+            return {"ok": True, "item": None}
+        item = dict(row)
+        cur2 = conn.execute(
+            "SELECT source, value, url FROM external_id WHERE entity_type='work' AND entity_id=? ORDER BY source",
+            (work_id,),
+        )
+        item["external_ids"] = [dict(r) for r in cur2.fetchall()]
+        return {"ok": True, "item": item}
 
 @app.get("/api/db/fts")
 async def api_db_fts(q: str = Query(..., description="FTS5 検索クエリ"), limit: int = Query(50, ge=1, le=200), db: Optional[str] = Query(None)):
